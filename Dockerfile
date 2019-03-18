@@ -21,11 +21,30 @@ ARG REACT_APP_ZUUL_API
 ARG REACT_APP_ENABLE_SERVICE_WORKER
 
 COPY . /tmp/src
+
+RUN apt-get update \
+  && apt-get -y install python3.5 python3-setuptools \
+  && rm -f /usr/local/bin/python3 /usr/local/bin/pip3* \
+  && ln -s /usr/bin/python3.5 /usr/local/bin/python3 \
+  && easy_install3 pip \
+  && pip3 install -r /tmp/src/build-requirements.txt \
+  && python3 /tmp/src/setup.py bdist_wheel
+
 RUN /tmp/src/tools/install-js-tools.sh \
   && mkdir -p /usr/share/man/man1
 RUN assemble
 
 FROM opendevorg/python-base as zuul
+
+COPY build-requirements.txt setup.py /tmp/
+RUN apt-get update \
+  && apt-get -y install python3.5 python3-setuptools python2 python2-setuptools \
+  && easy_install pip \
+  && rm -f /usr/local/bin/python3 /usr/local/bin/pip3* \
+  && ln -l /usr/bin/python3.5 /usr/local/bin/python3 \
+  && easy_install3 pip \
+  && pip3 install -r /tmp/build-requirements.txt \
+  && python3 /tmp/setup.py bdist_wheel
 
 COPY --from=builder /output/ /output
 RUN echo "deb http://ftp.debian.org/debian stretch-backports main" >> /etc/apt/sources.list \
