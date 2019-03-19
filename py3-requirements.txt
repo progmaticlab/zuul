@@ -1,0 +1,7 @@
+# These requirements used by Tungsten Fabric CI
+
+ara==0.14.4
+Jinja2==2.10
+jmespath
+PyMySQL
+urllib3==1.23
