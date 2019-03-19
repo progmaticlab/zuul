@@ -42,7 +42,7 @@ RUN apt-get update \
   && easy_install pip \
   && ln -s /usr/bin/python3.5 /usr/local/bin/python3 \
   && easy_install3 pip \
-  && pip3 install -r /tmp/build-requirements.txt
+  && pip3 install wheel lxml
 
 COPY --from=builder /output/ /output
 RUN echo "deb http://ftp.debian.org/debian stretch-backports main" >> /etc/apt/sources.list \
