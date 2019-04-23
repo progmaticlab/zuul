@@ -9,9 +9,9 @@ RUN echo "deb http://ppa.launchpad.net/openstack-ci-core/bubblewrap/ubuntu xenia
   && pip3 install lxml
 
 # py2-requirements.txt and py3-requirements.txt contains packages required by Tungsten Fabric CI
-RUN cd /tmp \
-  && git clone https://github.com/progmaticlab/zuul.git -b contrail/feature/zuulv3 \
-  && cd zuul \
+
+COPY . /tmp/zuul/
+RUN cd /tmp/zuul \
   && pip2 install -r py2-requirements.txt \
   && pip3 install . \
   && pip3 install -r py3-requirements.txt \
@@ -19,7 +19,6 @@ RUN cd /tmp \
   && rm -rf /tmp/zuul \
   && adduser --disabled-password --gecos GECOS zuul
 
-VOLUME /var/lib/zuul
 CMD ["/usr/local/bin/zuul"]
 
 FROM zuul as zuul-executor
@@ -35,5 +34,6 @@ FROM zuul as zuul-scheduler
 CMD ["/usr/local/bin/zuul-scheduler"]
 
 FROM zuul as zuul-web
+COPY /etc/status/public_html /var/lib/zuul/static/
+VOLUME /var/lib/zuul
 CMD ["/usr/local/bin/zuul-web"]
-
