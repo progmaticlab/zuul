@@ -38,7 +38,7 @@ FROM opendevorg/python-base as zuul
 COPY build-requirements.txt /tmp
 RUN apt-get update \
   && rm -f /usr/local/bin/python3 /usr/local/bin/pip3* \
-  && apt-get -y install python3.5 python3-venv python3-setuptools libpython3-dev python python-setuptools \
+  && apt-get -y install vim less python3.5 python3-venv python3-setuptools libpython3-dev python python-setuptools \
   && easy_install pip \
   && ln -s /usr/bin/python3.5 /usr/local/bin/python3 \
   && easy_install3 pip \
