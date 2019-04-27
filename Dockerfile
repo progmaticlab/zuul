@@ -16,6 +16,7 @@ RUN cd /tmp/zuul \
   && pip3 install . \
   && pip3 install -r py3-requirements.txt \
   && mkdir -p /var/log/zuul/public_html \
+  && mkdir -p /srv/static/logs \
   && cd etc/status \
   && sh fetch-dependencies.sh \
   && mkdir -p /var/lib/zuul \
