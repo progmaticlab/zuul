@@ -2,7 +2,7 @@ FROM ubuntu:xenial as zuul
 
 RUN echo "deb http://ppa.launchpad.net/openstack-ci-core/bubblewrap/ubuntu xenial main" >> /etc/apt/sources.list \
   && apt-get update \
-  && apt-get -y install curl unzip python3.5 python3-setuptools ca-certificates git build-essential zookeeperd libssl-dev libffi-dev libxml2-dev libxslt-dev python3-dev python python-setuptools python-dev \
+  && apt-get -y install vim less curl unzip python3.5 python3-setuptools ca-certificates git build-essential zookeeperd libssl-dev libffi-dev libxml2-dev libxslt-dev python3-dev python python-setuptools python-dev \
   && apt-get -y --allow-unauthenticated install bubblewrap \
   && easy_install pip \
   && easy_install3 pip \
