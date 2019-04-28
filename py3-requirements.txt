@@ -1,5 +1,6 @@
 # These requirements used by Tungsten Fabric CI
 
+Werkzeug<0.15
 ara==0.14.4
 Jinja2==2.10
 jmespath
