@@ -1554,7 +1554,7 @@ class TenantParser(object):
                 continue
             self.log.debug("Waiting for cat job %s" % (job,))
             job.wait()
-            if not job.updated:
+            if not hasattr(job, 'updated') or not job.updated:
                 raise Exception("Cat job %s failed" % (job,))
             self.log.debug("Cat job %s got files %s" %
                            (job, job.files.keys()))
