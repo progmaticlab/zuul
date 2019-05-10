@@ -29,3 +29,4 @@ pyjwt
 iso8601
 aiohttp<3.0.0
 uvloop;python_version>='3.5'
+yarl<1.2.1
