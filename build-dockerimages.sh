@@ -1,4 +1,4 @@
-#!/bin/sh -e
+#!/bin/bash -e
 
 # $1 - name of component to build. all components will be built if not present
 
