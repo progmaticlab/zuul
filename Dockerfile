@@ -2,11 +2,15 @@ FROM ubuntu:xenial as zuul
 
 RUN echo "deb http://ppa.launchpad.net/openstack-ci-core/bubblewrap/ubuntu xenial main" >> /etc/apt/sources.list \
   && apt-get update \
-  && apt-get -y install vim less curl unzip python3.5 python3-setuptools ca-certificates git build-essential zookeeperd libssl-dev libffi-dev libxml2-dev libxslt-dev python3-dev python python-setuptools python-dev \
+  && apt-get -y install vim less locales curl unzip python3.5 python3-setuptools ca-certificates git build-essential zookeeperd libssl-dev libffi-dev libxml2-dev libxslt-dev python3-dev python python-setuptools python-dev \
   && apt-get -y --allow-unauthenticated install bubblewrap \
   && easy_install pip \
   && easy_install3 pip \
-  && pip3 install lxml
+  && pip3 install lxml \
+  && echo "LC_ALL=en_US.UTF-8" >> /etc/environment \
+  && echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen \
+  && echo "LANG=en_US.UTF-8" > /etc/locale.conf \
+  && locale-gen en_US.UTF-8
 
 # py2-requirements.txt and py3-requirements.txt contains packages required by Tungsten Fabric CI
 
