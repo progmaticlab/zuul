@@ -19,7 +19,7 @@ RUN cd /tmp/zuul \
   && mkdir -p /srv/static/logs \
   && cd etc/status \
   && sh fetch-dependencies.sh \
-  && mkdir -p /var/lib/zuul \
+  && mkdir -p /var/lib/zuul/builds \
   && cp -r public_html /var/lib/zuul/ \
   && rm -rf /tmp/zuul \
   && adduser --disabled-password --gecos GECOS zuul
