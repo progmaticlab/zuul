@@ -22,7 +22,9 @@ RUN cd /tmp/zuul \
   && mkdir -p /var/lib/zuul/builds \
   && cp -r public_html /var/lib/zuul/ \
   && rm -rf /tmp/zuul \
-  && adduser --disabled-password --gecos GECOS zuul
+  && groupadd --gid 9999 --system zuul \
+  && adduser --uid 9999 --gid 9999 --disabled-password --gecos GECOS zuul \
+  && chown -R zuul:zuul /var/lib/zuul /var/log/zuul
 
 VOLUME /var/lib/zuul
 CMD ["/usr/local/bin/zuul"]
