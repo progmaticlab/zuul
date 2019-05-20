@@ -26,6 +26,7 @@ RUN cd /tmp/zuul \
   && adduser --uid 9999 --gid 9999 --disabled-password --gecos GECOS zuul \
   && chown -R zuul:zuul /var/lib/zuul /var/log/zuul
 
+USER 9999:9999
 VOLUME /var/lib/zuul
 CMD ["/usr/local/bin/zuul"]
 
