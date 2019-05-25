@@ -137,6 +137,9 @@ class GerritEventConnector(threading.Thread):
 
         self._getChange(event)
         self.connection.logEvent(event)
+        self._addEvent(event)
+
+    def _addEvent(self, event):
         self.connection.sched.addEvent(event)
 
     def _getChange(self, event):
