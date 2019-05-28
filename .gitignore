@@ -9,6 +9,7 @@
 .tox
 .venv
 .coverage
+.vscode
 AUTHORS
 build/*
 ChangeLog
