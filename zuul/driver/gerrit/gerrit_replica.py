@@ -13,121 +13,119 @@ import urllib
 import threading
 import os
 
-
-{'approvals': [{'description': 'Code-Review',
-                'type': 'Code-Review',
-                'value': '-1'}],
- 'author': {'email': 'alexey.morlang@gmail.com',
-            'name': 'alexey-mr',
-            'username': 'alexey-mr'},
- 'change': {'branch': 'master',
-            'commitMessage': 'Test dont merge\n'
-                             '\n'
-                             'Change-Id: '
-                             'Idb20a5e92bc8e6d003df1e8c2793edbd625d426c\n'
-                             'partial-jira-bug: CTINFRA-36\n',
-            'id': 'Idb20a5e92bc8e6d003df1e8c2793edbd625d426c',
-            'number': '51398',
-            'owner': {'email': 'alexey.morlang@gmail.com',
-                      'name': 'alexey-mr',
-                      'username': 'alexey-mr'},
-            'project': 'Juniper/contrail-container-builder',
-            'status': 'NEW',
-            'subject': 'Test dont merge',
-            'url': 'https://review.opencontrail.org/51398'},
- 'comment': 'Patch Set 5: Code-Review-1',
- 'eventCreatedOn': 1559058915,
- 'patchSet': {'author': {'email': 'alexey.morlang@gmail.com',
-                         'name': 'alexey-mr',
-                         'username': 'alexey-mr'},
-              'createdOn': 1559057380,
-              'isDraft': False,
-              'kind': 'REWORK',
-              'number': '5',
-              'parents': ['fe25d28b9699db1f56b5bb26781d3de20b9e79d0'],
-              'ref': 'refs/changes/98/51398/5',
-              'revision': 'f7427867ab80f8219839cdfcac839f1ce78af9c4',
-              'sizeDeletions': 0,
-              'sizeInsertions': 1,
-              'uploader': {'email': 'alexey.morlang@gmail.com',
-                           'name': 'alexey-mr',
-                           'username': 'alexey-mr'}},
- 'type': 'comment-added'}
-
-
- {'author': {'email': 'alexey.morlang@gmail.com',
-            'name': 'alexey-mr',
-            'username': 'alexey-mr'},
- 'change': {'branch': 'master',
-            'commitMessage': 'Test dont merge\n'
-                             '\n'
-                             'Change-Id: '
-                             'Idb20a5e92bc8e6d003df1e8c2793edbd625d426c\n'
-                             'partial-jira-bug: CTINFRA-36\n',
-            'id': 'Idb20a5e92bc8e6d003df1e8c2793edbd625d426c',
-            'number': '51398',
-            'owner': {'email': 'alexey.morlang@gmail.com',
-                      'name': 'alexey-mr',
-                      'username': 'alexey-mr'},
-            'project': 'Juniper/contrail-container-builder',
-            'status': 'NEW',
-            'subject': 'Test dont merge',
-            'url': 'https://review.opencontrail.org/51398'},
- 'comment': 'Patch Set 5: -Code-Review',
- 'eventCreatedOn': 1559058947,
- 'patchSet': {'author': {'email': 'alexey.morlang@gmail.com',
-                         'name': 'alexey-mr',
-                         'username': 'alexey-mr'},
-              'createdOn': 1559057380,
-              'isDraft': False,
-              'kind': 'REWORK',
-              'number': '5',
-              'parents': ['fe25d28b9699db1f56b5bb26781d3de20b9e79d0'],
-              'ref': 'refs/changes/98/51398/5',
-              'revision': 'f7427867ab80f8219839cdfcac839f1ce78af9c4',
-              'sizeDeletions': 0,
-              'sizeInsertions': 1,
-              'uploader': {'email': 'alexey.morlang@gmail.com',
-                           'name': 'alexey-mr',
-                           'username': 'alexey-mr'}},
- 'type': 'comment-added'}
-
-                              '\n'
-                             'Change-Id: '
-                             'I5ccf9cc8078dc2829fc485d970ab581155bd0469\n'
-                             'Depends-On: '
-                             'I23659e36d5b9dcc30f69a3cedcaf29f4082e04a6\n'
-                             'Partial-Jira-Bug: CEM-5693\n',
-            'id': 'I5ccf9cc8078dc2829fc485d970ab581155bd0469',
-            'number': '51505',
-            'owner': {'email': 'adrian.szczepanski@codilime.com',
-                      'name': 'Adrian Szczepanski',
-                      'username': 'adrian.szczepanski'},
-            'project': 'Juniper/contrail-vcenter-fabric-manager',
-            'status': 'NEW',
-            'subject': 'Add VM Disconnected Flow',
-            'topic': 'vm-disconnected',
-            'url': 'https://review.opencontrail.org/51505'},
- 'comment': 'Patch Set 5: Code-Review+2 Approved+1',
- 'eventCreatedOn': 1559058966,
- 'patchSet': {'author': {'email': 'adrian.szczepanski@codilime.com',
-                         'name': 'Adrian Szczepanski',
-                         'username': 'adrian.szczepanski'},
-              'createdOn': 1559058171,
-              'isDraft': False,
-              'kind': 'REWORK',
-              'number': '5',
-              'parents': ['a8e76f9990121985efc4668fbeb38d71dbede5c2'],
-              'ref': 'refs/changes/05/51505/5',
-              'revision': '2296aa844554a6546622d407446dc4d231a5f300',
-              'sizeDeletions': -4,
-              'sizeInsertions': 197,
-              'uploader': {'email': 'adrian.szczepanski@codilime.com',
-                           'name': 'Adrian Szczepanski',
-                           'username': 'adrian.szczepanski'}},
- 'type': 'comment-added'}
-
-
+###############################################################################
+# comment-added ( reply with code review -1)
+# {
+#     'approvals': [
+#         {
+#             'description': 'Code-Review',
+#             'type': 'Code-Review',
+#             'value': '-1'
+#         }
+#     ],
+#     'author': {
+#         'email': 'alexey.morlang@gmail.com',
+#         'name': 'alexey-mr',
+#         'username': 'alexey-mr'
+#     },
+#     'change': {
+#         'branch': 'master',
+#         'commitMessage': 'Test dont merge\n'
+#                          '\n'
+#                          'Change-Id: '
+#                          'Idb20a5e92bc8e6d003df1e8c2793edbd625d426c\n'
+#                          'partial-jira-bug: CTINFRA-36\n',
+#         'id': 'Idb20a5e92bc8e6d003df1e8c2793edbd625d426c',
+#         'number': '51398',
+#         'owner': {
+#             'email': 'alexey.morlang@gmail.com',
+#             'name': 'alexey-mr',
+#             'username': 'alexey-mr'
+#         },
+#         'project': 'Juniper/contrail-container-builder',
+#         'status': 'NEW',
+#         'subject': 'Test dont merge',
+#         'url': 'https://review.opencontrail.org/51398'
+#     },
+#     'comment': 'Patch Set 5: Code-Review-1',
+#     'eventCreatedOn': 1559058915,
+#     'patchSet': {
+#         'author': {
+#             'email': 'alexey.morlang@gmail.com',
+#             'name': 'alexey-mr',
+#             'username': 'alexey-mr'
+#         },
+#         'createdOn': 1559057380,
+#         'isDraft': False,
+#         'kind': 'REWORK',
+#         'number': '5',
+#         'parents': ['fe25d28b9699db1f56b5bb26781d3de20b9e79d0'],
+#         'ref': 'refs/changes/98/51398/5',
+#         'revision': 'f7427867ab80f8219839cdfcac839f1ce78af9c4',
+#         'sizeDeletions': 0,
+#         'sizeInsertions': 1,
+#         'uploader': {
+#             'email': 'alexey.morlang@gmail.com',
+#             'name': 'alexey-mr',
+#             'username': 'alexey-mr'
+#         }
+#     },
+#     'type': 'comment-added'
+# }
+#
+###############################################################################
+# comment-added ( reply with code review 0  (revert of -1))
+# {
+#     'author': {
+#         'email': 'alexey.morlang@gmail.com',
+#         'name': 'alexey-mr',
+#         'username': 'alexey-mr'
+#     },
+#     'change': {
+#         'branch': 'master',
+#         'commitMessage': 'Test dont merge\n'
+#                          '\n'
+#                          'Change-Id: '
+#                          'Idb20a5e92bc8e6d003df1e8c2793edbd625d426c\n'
+#                          'partial-jira-bug: CTINFRA-36\n',
+#         'id': 'Idb20a5e92bc8e6d003df1e8c2793edbd625d426c',
+#         'number': '51398',
+#         'owner': {
+#             'email': 'alexey.morlang@gmail.com',
+#             'name': 'alexey-mr',
+#             'username': 'alexey-mr'
+#         },
+#         'project': 'Juniper/contrail-container-builder',
+#         'status': 'NEW',
+#         'subject': 'Test dont merge',
+#         'url': 'https://review.opencontrail.org/51398'
+#     },
+#     'comment': 'Patch Set 5: -Code-Review',
+#     'eventCreatedOn': 1559058947,
+#     'patchSet': {
+#         'author': {
+#             'email': 'alexey.morlang@gmail.com',
+#             'name': 'alexey-mr',
+#             'username': 'alexey-mr'
+#         },
+#         'createdOn': 1559057380,
+#         'isDraft': False,
+#         'kind': 'REWORK',
+#         'number': '5',
+#         'parents': ['fe25d28b9699db1f56b5bb26781d3de20b9e79d0'],
+#         'ref': 'refs/changes/98/51398/5',
+#         'revision': 'f7427867ab80f8219839cdfcac839f1ce78af9c4',
+#         'sizeDeletions': 0,
+#         'sizeInsertions': 1,
+#         'uploader': {
+#             'email': 'alexey.morlang@gmail.com',
+#             'name': 'alexey-mr',
+#             'username': 'alexey-mr'
+#         }
+#     },
+#     'type': 'comment-added'
+# }
+#
 ###############################################################################
 # Change abandoned
 # {
