@@ -451,12 +451,12 @@ class GerritConnectionSlave(GerritConnection):
             # public changes to gerrit
             repo.push('HEAD', 'refs/publish/%s' % branch)
         except Exception:
-            self.log.exception("DBG: _processReplicatedEvent: check parent commit")
+            self.log.debug("DBG: _processReplicatedEvent: check parent commit")
             try_again = False
             for p in _get_value(event, ['patchSet', 'parents']):
                 review_id, parent_event = self._findCommitInGerrit(project, p)
                 if parent_event is None:
-                    self.log.exception("DBG: _processReplicatedEvent: %s / %s: try to replicate" % (review_id, p))
+                    self.log.debug("DBG: _processReplicatedEvent: %s / %s: try to replicate" % (review_id, p))
                     self._amendCommitMessage(repo, commit_id=p)
                     repo.push('HEAD', 'refs/publish/%s' % branch)
                     try_again = True
