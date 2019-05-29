@@ -12,6 +12,7 @@ import time
 import urllib
 import threading
 import os
+import re
 
 ###############################################################################
 # comment-added ( reply with code review -1)
@@ -222,7 +223,97 @@ import os
 #     "status": "NEW"
 #   }
 # }
-####
+#
+###############################################################################
+# change-merged:
+# {
+#     'change': {
+#         'branch': 'master',
+#         'commitMessage': 'For dpdk cluster enable agent restart testcases\n'
+#                         'Added agent-dpdk to list of services\n'
+#                         'Restart dpdk agent before starting agent '
+#                         'container\n'
+#                         '\n'
+#                         'Change-Id: Ie5def7a66f8415147e78e4869943266df2a81b3a\n'
+#                         'Closes-jira-bug: CEM-5445\n',
+#         'id': 'Ie5def7a66f8415147e78e4869943266df2a81b3a',
+#         'number': '51367',
+#         'owner': {'email': 'aswanikr@juniper.net',
+#                     'name': 'aswani kumar',
+#                     'username': 'aswanikumar'},
+#         'project': 'Juniper/contrail-test',
+#         'status': 'MERGED',
+#         'subject': 'For dpdk cluster enable agent restart testcases Added '
+#                     'agent-dpdk to list of services Restart dpdk agent '
+#                     'before starting agent container',
+#         'topic': 'R5.1_dpdk',
+#         'url': 'https://review.opencontrail.org/51367'},
+#         'eventCreatedOn': 1559063795,
+#         'newRev': '6a9eebe460d6eaaec1be5f0e1c3a0084be3b68ac',
+#         'patchSet': {
+#             'author': {'email': 'aswanikr@juniper.net',
+#                         'name': 'aswani kumar',
+#                         'username': 'aswanikumar'},
+#             'createdOn': 1558332874,
+#             'isDraft': False,
+#             'kind': 'REWORK',
+#             'number': '1',
+#             'parents': ['21e4274883604fb956e33ad78fbd09c90f9ec2ea'],
+#             'ref': 'refs/changes/67/51367/1',
+#             'revision': '2ca687f3781752324eeb1e77f1045a4b900c8211',
+#             'sizeDeletions': -5,
+#             'sizeInsertions': 33,
+#             'uploader': {'email': 'aswanikr@juniper.net',
+#                         'name': 'aswani kumar',
+#                         'username': 'aswanikumar'}},
+#             'submitter': {'email': 'zuulv3@zuul.opencontrail.org',
+#                             'name': 'Zuul v3 CI',
+#                             'username': 'zuulv3'},
+#     'type': 'change-merged'
+# }
+
+REPLICATE_PROJECTS = [
+    'Juniper/contrail-analytics',
+    'Juniper/contrail-ansible-deployer',
+    'Juniper/contrail-api-client',
+    'Juniper/contrail-build',
+    'Juniper/contrail-common',
+    'Juniper/contrail-community-docs',
+    'Juniper/contrail-container-builder',
+    'Juniper/contrail-controller',
+    'Juniper/contrail-deployers-containers',
+    'Juniper/contrail-dev-env',
+    'Juniper/contrail-docker',
+    'Juniper/contrail-docs',
+    'Juniper/contrail-dpdk',
+    'Juniper/contrail-heat',
+    'Juniper/contrail-helm-deployer',
+    'Juniper/contrail-horizon',
+    'Juniper/contrail-infra',
+    'Juniper/contrail-infra-doc',
+    'Juniper/contrail-java-api',
+    'Juniper/contrail-kolla-ansible',
+    'Juniper/contrail-neutron-plugin',
+    'Juniper/contrail-nova-vif-driver',
+    'Juniper/contrail-packages',
+    'Juniper/contrail-packaging',
+    'Juniper/contrail-provisioning',
+    'Juniper/contrail-puppet',
+    'Juniper/contrail-sandesh',
+    'Juniper/contrail-specs',
+    'Juniper/contrail-test',
+    'Juniper/contrail-test-ci',
+    'Juniper/contrail-third-party',
+    'Juniper/contrail-third-party-cache',
+    'Juniper/contrail-third-party-packages',
+    'Juniper/contrail-tripleo-heat-templates',
+    'Juniper/contrail-tripleo-puppet',
+    'Juniper/contrail-vro-plugin',
+    'Juniper/contrail-vrouter'
+]
+
+COMMENT_PATTERN = 'recheck(( zuulv3)|( no bug))?(\s+clean)?\s*$'
+COMMENT_RE = re.compile(COMMENT_PATTERN, re.MULTILINE)
 
 def _get_value(data, field):
     if not data:
@@ -234,6 +325,8 @@ def _get_value(data, field):
 
 
 class GerritEventConnectorSlave(GerritEventConnector):
+    log = logging.getLogger("zuul.GerritEventConnector")
+
     def __init__(self, connection):
         super(GerritEventConnectorSlave, self).__init__(connection)
 
@@ -277,6 +370,9 @@ class GerritReplicateEventThread(threading.Thread):
 
 
 class GerritConnectionSlave(GerritConnection):
+    log = logging.getLogger("zuul.GerritConnectionSlave")
+    iolog = logging.getLogger("zuul.GerritConnectionSlave.io")
+
     WORKING_DIR = '/home/zuul/git-slave'
 
     def __init__(self, driver, connection_name, connection_config):
@@ -315,7 +411,10 @@ class GerritConnectionSlave(GerritConnection):
             return self._processChangeAbandonedEvent(event)
 
         if change_type  == 'change-merged':
-            return self._processChangeRestoredEvent(event)
+            return self._processChangeMergedEvent(event)
+
+        if change_type  == 'comment-added':
+            return self._processCommentAddedEvent(event)
 
         self.log.debug("DBG: skip change type: %s" % change_type)
 
@@ -325,7 +424,7 @@ class GerritConnectionSlave(GerritConnection):
         if branch != 'master':
             self.log.debug("DBG: skip branch: %s" % branch)
             return True
-        if project != 'Juniper/contrail-container-builder':
+        if project not in REPLICATE_PROJECTS:
             self.log.debug("DBG: skip project: %s" % project)
             return True
         return False
@@ -362,10 +461,8 @@ class GerritConnectionSlave(GerritConnection):
         action = {'abandon': True}
         self._processChangeRestoredOrAbandonedEvent(event, action)
 
-    def _processChangeRestoredOrAbandonedEvent(self, event, action):
-        project = _get_value(event, ['change', 'project'])
+    def _getCurrentReviewId(self, event):
         change_id = _get_value(event, ['change', 'id'])
-        self.log.debug("DBG: _processChangeRestoredOrAbandonedEvent: %s: %s: %s" % (project, change_id, action))
         query = "change:%s" % change_id
         data = self.simpleQuery(query)
         changeid = None
@@ -374,12 +471,68 @@ class GerritConnectionSlave(GerritConnection):
                 change_number = _get_value(record, ['number'])
                 patch_number = _get_value(record, ['currentPatchSet', 'number'])
                 changeid = '%s,%s' % (change_number, patch_number)
+        return changeid
+
+    def _processChangeRestoredOrAbandonedEvent(self, event, action):
+        project = _get_value(event, ['change', 'project'])
+        change_id = _get_value(event, ['change', 'id'])
+        self.log.debug("DBG: _processChangeRestoredOrAbandonedEvent: %s: %s: %s" % (project, change_id, action))
+        changeid = self._getCurrentReviewId(event)
+        if changeid is None:
+            self.log.debug("DBG: _processChangeRestoredOrAbandonedEvent: review is not replicated - skipped")
+            return
         err = self.review(project, changeid, None, action)
         self.log.debug("DBG: _processChangeRestoredOrAbandonedEvent: gerrit review result: %s" % err)
 
-
     def _processChangeMergedEvent(self, event):
-        self.log.debug("DBG: _processChangeMergedEvent: TODO impl")
+        # project = _get_value(event, ['change', 'project'])
+        change_id = _get_value(event, ['change', 'id'])
+        query = "change:%s" % change_id
+        data = self.simpleQuery(query)
+        self.log.debug("DBG: _processChangeMergedEvent: gerrit review result: %s" % data)
+        # TODO: force merge?
+        # change_number = _get_value(event, ['change', 'number'])
+        # patch_number = _get_value(event, ['patchSet', 'number'])
+        # changeid = '%s,%s' % (change_number, patch_number)
+        # self.log.debug("DBG: _processChangeMergedEvent: %s: %s" % (project, changeid))
+        # action = {
+        #     'verified': '+2',
+        #     'code-review': '+2',
+        #     'approved': '+1'
+        # }
+        # err = self.review(project, changeid, None, action)
+        # self.log.debug("DBG: _processChangeMergedEvent: gerrit review result: %s" % err)
+
+    def _processCommentAddedEvent(self, event):
+        project = _get_value(event, ['change', 'project'])
+        change_id = _get_value(event, ['change', 'id'])
+        self.log.debug("DBG: _processCommentAddedEvent: %s: %s" % (project, change_id))
+        changeid = self._getCurrentReviewId(event)
+        actions = {}
+        message = None
+        approvals = _get_value(event, 'approvals')
+        if approvals is not None:
+            for a in approvals:
+                t = _get_value(a, 'type')
+                v = _get_value(a, 'value')
+                if t == 'Code-Review':
+                    actions['code-review'] = v
+                elif t == 'Approved':
+                    actions['approved'] = v
+                else:
+                    self.log.debug("DBG: _processCommentAddedEvent: skip approval type: %s" % t)
+        else:
+            comment = _get_value(event, 'comment')
+            # if comment.find(': -Code-Review'):
+            #     actions['code-review'] = '0'
+            if COMMENT_RE.search(comment) is not None:
+                message = 'recheck'
+            else:
+                self.log.debug("DBG: _processCommentAddedEvent: skip comment: %s" % comment)
+                return
+        err = self.review(project, changeid, message, actions)
+        self.log.debug("DBG: _processChangeMergedEvent: gerrit review result: %s" % err)
+
 
     def _start_watcher_thread(self):
         pass
@@ -394,10 +547,12 @@ class GerritConnectionSlave(GerritConnection):
         if self.replicate_thread:
             self.replicate_thread.stop()
             self.replicate_thread.join()
-        super(GerritConnectionSlave, self)._stop_event_connector()        
+        super(GerritConnectionSlave, self)._stop_event_connector()
 
 
 class GerritWatcherMaster(GerritWatcher):
+    log = logging.getLogger("gerrit.GerritWatcherMaster")
+
     def __init__(self, gerrit_connection, username, hostname,
                  port=29418, keyfile=None, keepalive=60):
         super(GerritWatcherMaster, self).__init__(
@@ -405,22 +560,10 @@ class GerritWatcherMaster(GerritWatcher):
             keyfile=keyfile, keepalive=keepalive)
 
 
-class GerritEventConnectorMaster(GerritEventConnector):
-    def __init__(self, connection):
-        super(GerritEventConnectorMaster, self).__init__(connection)
-
-    def _addEvent(self, event):
-        self.log.debug("DBG: GerritEventConnectorMaster: _addEvent: %s" % event)
-        self.connection.addEvent(event)
-
-    def _getChange(self, event):
-        self.log.debug("DBG: GerritEventConnectorMaster: _getChange: %s" % event)
-        self.connection._getChange(event.change_number,
-                                    event.patch_number,
-                                    refresh=True)
-
-
 class GerritConnectionMaster(GerritConnection):
+    log = logging.getLogger("zuul.GerritConnectionMaster")
+    iolog = logging.getLogger("zuul.GerritConnectionMaster.io")
+
     def __init__(self, driver, connection_name, connection_config):
         super(GerritConnectionMaster, self).__init__(
             driver, connection_name, connection_config)
@@ -447,10 +590,7 @@ class GerritConnectionMaster(GerritConnection):
         self.log.debug("DBG: gcm start gwm done")
 
     def _start_event_connector(self):
-        self.log.debug("DBG: gcm start gecm")
-        self.gerrit_event_connector = GerritEventConnectorMaster(self)
-        self.gerrit_event_connector.start()
-        self.log.debug("DBG: gcm start gecm done")
+        pass
 
 
 class ConnectionRegistry(object):
@@ -504,7 +644,7 @@ if __name__ == "__main__":
     connection_slave = GerritConnectionSlave(driver, 'gerrit_slave', config_slave)
     connection_master = GerritConnectionMaster(driver, 'gerrit_master', config_master)
 
-    registry = ConnectionRegistry()    
+    registry = ConnectionRegistry()
     registry.connections['gerrit_slave'] = connection_slave
     registry.connections['gerrit_master'] = connection_master
 
