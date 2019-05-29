@@ -333,9 +333,7 @@ class GerritEventConnectorSlave(GerritEventConnector):
     def _handleEvent(self):
         ts, event = self.connection.getEvent()
         # pause see details in base class
-        now = time.time()
-        time.sleep(max((ts + self.delay) - now, 0.0))
-
+        self._pauseForGerrit()
         if self._stopped:
             return
         self.connection.doReplicateEvent(event)
@@ -345,6 +343,10 @@ class GerritEventConnectorSlave(GerritEventConnector):
 
     def _getChange(self, event):
         pass
+
+    def _pauseForGerrit(self):
+        now = time.time()
+        time.sleep(max((ts + self.delay) - now, 0.0))
 
 
 class GerritConnectionSlave(GerritConnection):
@@ -422,11 +424,20 @@ class GerritConnectionSlave(GerritConnection):
 
     def _processChangeRestoredEvent(self, event):
         action = {'restore': True}
-        self._processChangeRestoredOrAbandonedEvent(event, action)
+        changeid = self._getCurrentReviewId(event)
+        if changeid is None:
+            # push as new
+            self._processPatchSetEvent(event)
+        else:
+            self._processChangeRestoredOrAbandonedEvent(event, action, changeid)
 
     def _processChangeAbandonedEvent(self, event):
         action = {'abandon': True}
-        self._processChangeRestoredOrAbandonedEvent(event, action)
+        changeid = self._getCurrentReviewId(event)
+        if changeid is None:
+            self.log.debug("DBG: _processChangeAbandonedEvent: review is not replicated - skipped")
+            return
+        self._processChangeRestoredOrAbandonedEvent(event, action, changeid)
 
     def _getCurrentReviewId(self, event):
         change_id = _get_value(event, ['change', 'id'])
@@ -440,14 +451,10 @@ class GerritConnectionSlave(GerritConnection):
                 changeid = '%s,%s' % (change_number, patch_number)
         return changeid
 
-    def _processChangeRestoredOrAbandonedEvent(self, event, action):
+    def _processChangeRestoredOrAbandonedEvent(self, event, action, changeid):
         project = _get_value(event, ['change', 'project'])
         change_id = _get_value(event, ['change', 'id'])
         self.log.debug("DBG: _processChangeRestoredOrAbandonedEvent: %s: %s: %s" % (project, change_id, action))
-        changeid = self._getCurrentReviewId(event)
-        if changeid is None:
-            self.log.debug("DBG: _processChangeRestoredOrAbandonedEvent: review is not replicated - skipped")
-            return
         err = self.review(project, changeid, None, action)
         self.log.debug("DBG: _processChangeRestoredOrAbandonedEvent: gerrit review result: %s" % err)
 
@@ -475,6 +482,14 @@ class GerritConnectionSlave(GerritConnection):
         change_id = _get_value(event, ['change', 'id'])
         self.log.debug("DBG: _processCommentAddedEvent: %s: %s" % (project, change_id))
         changeid = self._getCurrentReviewId(event)
+        if changeid is None:
+            # review is not replicated yet, push new
+            self._processPatchSetEvent(event)
+            self.gerrit_event_connector._pauseForGerrit()
+            changeid = self._getCurrentReviewId(event)
+        if changeid is None:
+            self.log.debug("DBG: _processCommentAddedEvent: review is not replicated and failed to replicate - skipped")
+            return
         actions = {}
         message = None
         approvals = _get_value(event, 'approvals')
