@@ -414,10 +414,10 @@ class GerritConnectionSlave(GerritConnection):
         remote = urllib.parse.urlunparse(r._replace(path="/{}".format(project), fragment='', query=''))
         return remote
 
-    def _cherryPickFromRemote(self, repo, remote, project, ref):
+    def _checkoutFromRemote(self, repo, remote, project, ref):
         repo.fetchFrom(remote, ref)
         git_repo = repo.createRepoObject()
-        git_repo.git.cherry_pick("FETCH_HEAD")
+        git_repo.git.checkout("FETCH_HEAD")
         return git_repo.head.commit
 
     def _amendCommitMessage(self, repo, message=None, commit_id=None):
@@ -441,8 +441,7 @@ class GerritConnectionSlave(GerritConnection):
             return
         remote = self._getRemote(project, url)
         repo = self.merger.getRepo(self.connection_name, project)
-        repo.reset()
-        commit = self._cherryPickFromRemote(repo, remote, project, ref)
+        commit = self._checkoutFromRemote(repo, remote, project, ref)
         self.log.debug("DBG: _processReplicatedEvent: commit=%s" % commit)
         # reset author to default (zuul)
         new_message =  'Initial Review: %s\n\n%s' % (url, _get_value(event, ['change', 'commitMessage']))
