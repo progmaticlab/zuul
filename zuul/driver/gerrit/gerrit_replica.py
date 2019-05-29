@@ -406,8 +406,9 @@ class GerritConnectionSlave(GerritConnection):
         return False
 
     def _processPatchSetEvent(self, event):
-        project = _get_value(event, ['change', 'project'])
         try:
+            project = _get_value(event, ['change', 'project'])
+            branch = _get_value(event, ['change', 'branch'])
             url = _get_value(event, ['change', 'url'])
             ref = _get_value(event, ['patchSet', 'ref'])
             if not url:
@@ -418,15 +419,15 @@ class GerritConnectionSlave(GerritConnection):
             repo = self.merger.getRepo(self.connection_name, project)
             repo.fetchFrom(remote, ref)
             commit = repo.checkout('FETCH_HEAD')
-            self.log.debug("DBG: _processReplicatedEvent: checkout=%s" % commit)
+            self.log.debug("DBG: _processReplicatedEvent: commit=%s" % commit)
             # reset author to default (zuul)
             git_repo = repo.createRepoObject()
             new_message =  'Initial Review: %s\n\n%s' % (url, _get_value(event, ['change', 'commitMessage']))
             git_repo.git.commit('--amend', '--reset-author', '--no-edit', '--message', new_message)
             commit = git_repo.head.commit
-            self.log.debug("DBG: _processReplicatedEvent: checkout=%s" % commit)
+            self.log.debug("DBG: _processReplicatedEvent: amended commit=%s" % commit)
             # public changes to gerrit
-            repo.push('HEAD', 'refs/publish/master')
+            repo.push('HEAD', 'refs/publish/%s' % branch)
         except Exception as e:
             self.log.exception("DBG: %s" % e)
 
