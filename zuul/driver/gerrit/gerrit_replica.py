@@ -488,6 +488,7 @@ class GerritConnectionSlave(GerritConnection):
                     actions['approved'] = v
                 else:
                     self.log.debug("DBG: _processCommentAddedEvent: skip approval type: %s" % t)
+                    return
         else:
             comment = _get_value(event, 'comment')
             # if comment.find(': -Code-Review'):
