@@ -441,6 +441,7 @@ class GerritConnectionSlave(GerritConnection):
             return
         remote = self._getRemote(project, url)
         repo = self.merger.getRepo(self.connection_name, project)
+        repo.reset()
         commit = self._cherryPickFromRemote(repo, remote, project, ref)
         self.log.debug("DBG: _processReplicatedEvent: commit=%s" % commit)
         # reset author to default (zuul)
