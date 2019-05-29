@@ -325,48 +325,26 @@ def _get_value(data, field):
 
 
 class GerritEventConnectorSlave(GerritEventConnector):
-    log = logging.getLogger("zuul.GerritEventConnector")
+    log = logging.getLogger("zuul.GerritEventConnectorSlave")
 
     def __init__(self, connection):
         super(GerritEventConnectorSlave, self).__init__(connection)
+
+    def _handleEvent(self):
+        ts, event = self.connection.getEvent()
+        # pause see details in base class
+        now = time.time()
+        time.sleep(max((ts + self.delay) - now, 0.0))
+
+        if self._stopped:
+            return
+        self.connection.doReplicateEvent(event)
 
     def _addEvent(self, event):
         pass
 
     def _getChange(self, event):
         pass
-
-
-class GerritReplicateEventThread(threading.Thread):
-    log = logging.getLogger("zuul.GerritReplicateEventThread")
-    delay = 10.0
-
-    def __init__(self, connection):
-        super(GerritReplicateEventThread, self).__init__()
-        self.daemon = True
-        self.connection = connection
-        self._stopped = False
-
-    def stop(self):
-        self._stopped = True
-        self.connection.replicateEvent(None)
-
-    def _handleEvent(self):
-        ts, event = self.connection.getReplicateEvent()
-        if self._stopped:
-            return
-        self.connection.doReplicateEvent(event)
-
-    def run(self):
-        while True:
-            if self._stopped:
-                return
-            try:
-                self._handleEvent()
-            except Exception as e:
-                self.log.exception("Exception Replicate Gerrit event: %s" %e)
-            finally:
-                self.connection.replicateEventDone()
 
 
 class GerritConnectionSlave(GerritConnection):
@@ -379,21 +357,9 @@ class GerritConnectionSlave(GerritConnection):
         super(GerritConnectionSlave, self).__init__(
             driver, connection_name, connection_config)
         self.merger = None
-        self.replicate_thread = None
-        self.replicate_event_queue = queue.Queue()
 
     def setMerger(self, merger):
         self.merger = merger
-
-    def replicateEvent(self, event):
-        return self.replicate_event_queue.put((time.time(), event))
-
-    def getReplicateEvent(self):
-        return self.replicate_event_queue.get()
-
-    def replicateEventDone(self):
-        self.log.debug("DBG: replicateEventDone")
-        self.replicate_event_queue.task_done()
 
     def doReplicateEvent(self, event):
         if self._filterEvent(event):
@@ -445,7 +411,8 @@ class GerritConnectionSlave(GerritConnection):
             self.log.debug("DBG: _processReplicatedEvent: checkout=%s" % commit)
             # reset author to default (zuul)
             git_repo = repo.createRepoObject()
-            git_repo.git.commit('--amend', '--reset-author', '--no-edit')
+            new_message =  'Initial Review: %s\n\n%s' % (url, _get_value(event, ['change', 'commitMessage']))
+            git_repo.git.commit('--amend', '--reset-author', '--no-edit', '--message', new_message)
             commit = git_repo.head.commit
             self.log.debug("DBG: _processReplicatedEvent: checkout=%s" % commit)
             # public changes to gerrit
@@ -540,14 +507,6 @@ class GerritConnectionSlave(GerritConnection):
     def _start_event_connector(self):
         self.gerrit_event_connector = GerritEventConnectorSlave(self)
         self.gerrit_event_connector.start()
-        self.replicate_thread = GerritReplicateEventThread(self)
-        self.replicate_thread.start()
-
-    def _stop_event_connector(self):
-        if self.replicate_thread:
-            self.replicate_thread.stop()
-            self.replicate_thread.join()
-        super(GerritConnectionSlave, self)._stop_event_connector()
 
 
 class GerritWatcherMaster(GerritWatcher):
@@ -575,7 +534,7 @@ class GerritConnectionMaster(GerritConnection):
     def addEvent(self, event):
         if not self.slave:
             return
-        return self.slave.replicateEvent(event)
+        return self.slave.addEvent(event)
 
     def _start_watcher_thread(self):
         self.log.debug("DBG: gcm start gwm")
