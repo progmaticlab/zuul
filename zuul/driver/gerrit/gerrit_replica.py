@@ -333,7 +333,7 @@ class GerritEventConnectorSlave(GerritEventConnector):
     def _handleEvent(self):
         ts, event = self.connection.getEvent()
         # pause see details in base class
-        self._pauseForGerrit()
+        self._pauseForGerrit(ts = ts)
         if self._stopped:
             return
         self.connection.doReplicateEvent(event)
@@ -344,10 +344,12 @@ class GerritEventConnectorSlave(GerritEventConnector):
     def _getChange(self, event):
         pass
 
-    def _pauseForGerrit(self):
-        now = time.time()
-        time.sleep(max((ts + self.delay) - now, 0.0))
-
+    def _pauseForGerrit(self, ts = None):
+        if ts is not None:
+            now = time.time()
+            time.sleep(max((ts + self.delay) - now, 0.0))
+        else:
+            time.sleep(self.delay)
 
 class GerritConnectionSlave(GerritConnection):
     log = logging.getLogger("zuul.GerritConnectionSlave")
