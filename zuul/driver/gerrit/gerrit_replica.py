@@ -14,6 +14,51 @@ import threading
 import os
 import re
 
+REPLICATE_PROJECTS = [
+    'Juniper/contrail-analytics',
+    'Juniper/contrail-ansible-deployer',
+    'Juniper/contrail-api-client',
+    'Juniper/contrail-build',
+    'Juniper/contrail-common',
+    'Juniper/contrail-community-docs',
+    'Juniper/contrail-container-builder',
+    'Juniper/contrail-controller',
+    'Juniper/contrail-deployers-containers',
+    'Juniper/contrail-dev-env',
+    'Juniper/contrail-docker',
+    'Juniper/contrail-docs',
+    'Juniper/contrail-dpdk',
+    'Juniper/contrail-heat',
+    'Juniper/contrail-helm-deployer',
+    'Juniper/contrail-horizon',
+    'Juniper/contrail-infra',
+    'Juniper/contrail-infra-doc',
+    'Juniper/contrail-java-api',
+    'Juniper/contrail-kolla-ansible',
+    'Juniper/contrail-neutron-plugin',
+    'Juniper/contrail-nova-vif-driver',
+    'Juniper/contrail-packages',
+    'Juniper/contrail-packaging',
+    'Juniper/contrail-provisioning',
+    'Juniper/contrail-puppet',
+    'Juniper/contrail-sandesh',
+    'Juniper/contrail-specs',
+    'Juniper/contrail-test',
+    'Juniper/contrail-test-ci',
+    'Juniper/contrail-third-party',
+    'Juniper/contrail-third-party-cache',
+    'Juniper/contrail-third-party-packages',
+    'Juniper/contrail-tripleo-heat-templates',
+    'Juniper/contrail-tripleo-puppet',
+    'Juniper/contrail-vro-plugin',
+    'Juniper/contrail-vrouter'
+]
+
+REPLICATE_BRANCHES = [
+    'master',
+    'stable/queens'
+]
+
 ###############################################################################
 # comment-added ( reply with code review -1)
 # {
@@ -272,45 +317,6 @@ import re
 #     'type': 'change-merged'
 # }
 
-REPLICATE_PROJECTS = [
-    'Juniper/contrail-analytics',
-    'Juniper/contrail-ansible-deployer',
-    'Juniper/contrail-api-client',
-    'Juniper/contrail-build',
-    'Juniper/contrail-common',
-    'Juniper/contrail-community-docs',
-    'Juniper/contrail-container-builder',
-    'Juniper/contrail-controller',
-    'Juniper/contrail-deployers-containers',
-    'Juniper/contrail-dev-env',
-    'Juniper/contrail-docker',
-    'Juniper/contrail-docs',
-    'Juniper/contrail-dpdk',
-    'Juniper/contrail-heat',
-    'Juniper/contrail-helm-deployer',
-    'Juniper/contrail-horizon',
-    'Juniper/contrail-infra',
-    'Juniper/contrail-infra-doc',
-    'Juniper/contrail-java-api',
-    'Juniper/contrail-kolla-ansible',
-    'Juniper/contrail-neutron-plugin',
-    'Juniper/contrail-nova-vif-driver',
-    'Juniper/contrail-packages',
-    'Juniper/contrail-packaging',
-    'Juniper/contrail-provisioning',
-    'Juniper/contrail-puppet',
-    'Juniper/contrail-sandesh',
-    'Juniper/contrail-specs',
-    'Juniper/contrail-test',
-    'Juniper/contrail-test-ci',
-    'Juniper/contrail-third-party',
-    'Juniper/contrail-third-party-cache',
-    'Juniper/contrail-third-party-packages',
-    'Juniper/contrail-tripleo-heat-templates',
-    'Juniper/contrail-tripleo-puppet',
-    'Juniper/contrail-vro-plugin',
-    'Juniper/contrail-vrouter'
-]
 
 COMMENT_PATTERN = 'recheck(( zuulv3)|( no bug))?(\s+clean)?\s*$'
 COMMENT_RE = re.compile(COMMENT_PATTERN, re.MULTILINE)
@@ -391,7 +397,7 @@ class GerritConnectionSlave(GerritConnection):
     def _filterEvent(self, event):
         project = _get_value(event, ['change', 'project'])
         branch = _get_value(event, ['change', 'branch'])
-        if branch != 'master':
+        if branch not in REPLICATE_BRANCHES:
             self.log.debug("DBG: skip branch: %s" % branch)
             return True
         if project not in REPLICATE_PROJECTS:
