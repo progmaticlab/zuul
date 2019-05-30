@@ -460,6 +460,24 @@ class GerritConnectionSlave(GerritConnection):
             for p in _get_value(event, ['patchSet', 'parents']):
                 parent_review_id, parent_event = self._findCommitInGerritMaster(project, p)
                 if parent_event is not None:
+                    #patch parent event if it has no change inside )it is for merged changes)
+                    change = _get_value(parent_event, 'change')
+                    if change is None:
+                        change = {}
+                        change['id'] = parent_review_id
+                        change['project'] = _get_value(parent_event, 'project')
+                        change['branch'] = _get_value(parent_event, 'branch')
+                        change['number'] = _get_value(parent_event, 'number')
+                        change['url'] = _get_value(parent_event, 'url')
+                        change['commitMessage'] = _get_value(parent_event, 'commitMessage')
+                        parent_event['change'] = change
+                    patchSet = _get_value(parent_event, 'patchSet')
+                    if patchSet is None:
+                        patchSet = {}
+                        patchSet['number'] = _get_value(parent_event, ['currentPatchSet', 'number'])
+                        patchSet['ref'] = _get_value(parent_event, ['currentPatchSet', 'ref'])
+                        patchSet['parents'] = _get_value(parent_event, ['currentPatchSet', 'parents'])
+                        parent_event['patchSet'] = patchSet
                     # pranet found on master
                     parent_changeid = self._getCurrentChangeId(parent_event)
                     if parent_changeid is not None:
@@ -640,6 +658,12 @@ class GerritConnectionMaster(GerritConnection):
         for record in data:
             rid = _get_value(record, 'id')
             if rid == review_id:
+                status = _get_value(record, 'status')
+                if status is None:
+                    status = _get_value(record, ['change', 'status'])
+                if status == 'ABANDONED':
+                    self.log.debug("DBG: _findCommitInGerrit: skip abandoned")
+                    continue
                 self.log.debug("DBG: _findCommitInGerrit: return: (%s, %s)" % (review_id, record))
                 return (review_id, record)
         return (review_id, None)
