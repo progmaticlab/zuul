@@ -339,7 +339,7 @@ def _get_value(data, field):
 
 class GerritConnectionReplicationBase:
     def _findReviewInGerrit(self, project, review_id): 
-        self.log.debug("DBG: _findReviewInGerrit: project: %s, review_id" % (project, review_id))
+        self.log.debug("DBG: _findReviewInGerrit: project: %s, %s" % (project, review_id))
         query = "change:%s" % review_id
         data = self.simpleQuery(query)
         self.log.debug("DBG: _findReviewInGerrit: data: %s" % data)
