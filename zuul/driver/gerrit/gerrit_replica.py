@@ -337,7 +337,7 @@ def _get_value(data, field):
     return _get_value(v, field[1:]) if len(field) > 1 else v
 
 
-class GerritConnectionReplicationBase(Object):
+class GerritConnectionReplicationBase:
     def _findReviewInGerrit(self, project, review_id): 
         self.log.debug("DBG: _findReviewInGerrit: project: %s, review_id" % (project, review_id))
         query = "change:%s" % review_id
