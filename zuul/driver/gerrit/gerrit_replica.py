@@ -275,49 +275,48 @@ REPLICATE_BRANCHES = [
 ###############################################################################
 # change-merged:
 # {
-#     'change': {
-#         'branch': 'master',
-#         'commitMessage': 'For dpdk cluster enable agent restart testcases\n'
-#                         'Added agent-dpdk to list of services\n'
-#                         'Restart dpdk agent before starting agent '
-#                         'container\n'
-#                         '\n'
-#                         'Change-Id: Ie5def7a66f8415147e78e4869943266df2a81b3a\n'
-#                         'Closes-jira-bug: CEM-5445\n',
-#         'id': 'Ie5def7a66f8415147e78e4869943266df2a81b3a',
-#         'number': '51367',
-#         'owner': {'email': 'aswanikr@juniper.net',
-#                     'name': 'aswani kumar',
-#                     'username': 'aswanikumar'},
-#         'project': 'Juniper/contrail-test',
-#         'status': 'MERGED',
-#         'subject': 'For dpdk cluster enable agent restart testcases Added '
-#                     'agent-dpdk to list of services Restart dpdk agent '
-#                     'before starting agent container',
-#         'topic': 'R5.1_dpdk',
-#         'url': 'https://review.opencontrail.org/51367'},
-#         'eventCreatedOn': 1559063795,
-#         'newRev': '6a9eebe460d6eaaec1be5f0e1c3a0084be3b68ac',
-#         'patchSet': {
-#             'author': {'email': 'aswanikr@juniper.net',
-#                         'name': 'aswani kumar',
-#                         'username': 'aswanikumar'},
-#             'createdOn': 1558332874,
-#             'isDraft': False,
-#             'kind': 'REWORK',
-#             'number': '1',
-#             'parents': ['21e4274883604fb956e33ad78fbd09c90f9ec2ea'],
-#             'ref': 'refs/changes/67/51367/1',
-#             'revision': '2ca687f3781752324eeb1e77f1045a4b900c8211',
-#             'sizeDeletions': -5,
-#             'sizeInsertions': 33,
-#             'uploader': {'email': 'aswanikr@juniper.net',
-#                         'name': 'aswani kumar',
-#                         'username': 'aswanikumar'}
-#          },
-#          'submitter': {'email': 'zuulv3@zuul.opencontrail.org',
-#                   'name': 'Zuul v3 CI',
-#                   'username': 'zuulv3'},
+#     'change': {'branch': 'master',
+#                 'commitMessage': 'accept cc-ip-address:cc-port as well, keep 443 '
+#                                 'as default\n'
+#                                 '\n'
+#                                 'closes-jira-bug: CEM-5823\n'
+#                                 '\n'
+#                                 'PATCH-1:\n'
+#                                 '1. addressing review comments\n'
+#                                 'Change-Id: '
+#                                 'Icdcc77c7548cd5ac0346138becf96090fca7ea9d\n',
+#                 'id': 'Icdcc77c7548cd5ac0346138becf96090fca7ea9d',
+#                 'number': '51529',
+#                 'owner': {'email': 'dgautam@juniper.net',
+#                         'name': 'Dheeraj Gautam',
+#                         'username': 'dgautam'},
+#                 'project': 'Juniper/contrail-controller',
+#                 'status': 'MERGED',
+#                 'subject': 'accept cc-ip-address:cc-port as well, keep 443 as '
+#                         'default',
+#                 'topic': 'cem-5824',
+#                 'url': 'https://review.opencontrail.org/51529'
+#     },
+#     'eventCreatedOn': 1559239187,
+#     'newRev': 'c04546e7ebb572ac48942c958691fa370c465b02',
+#     'patchSet': {'author': {'email': 'dgautam@juniper.net',
+#                             'name': 'Dheeraj Gautam',
+#                             'username': 'dgautam'},
+#                 'createdOn': 1559158074,
+#                 'isDraft': False,
+#                 'kind': 'REWORK',
+#                 'number': '3',
+#                 'parents': ['5b9271dd08b80ee95cea60a1f302f427d9873df9'],
+#                 'ref': 'refs/changes/29/51529/3',
+#                 'revision': '6b6746e69213b864705d7beb1a8ee4e2dbdafd95',
+#                 'sizeDeletions': -2,
+#                 'sizeInsertions': 5,
+#                 'uploader': {'email': 'dgautam@juniper.net',
+#                             'name': 'Dheeraj Gautam',
+#                             'username': 'dgautam'}},
+#     'submitter': {'email': 'zuulv3@zuul.opencontrail.org',
+#                 'name': 'Zuul v3 CI',
+#                 'username': 'zuulv3'},
 #     'type': 'change-merged'
 # }
 
@@ -572,20 +571,21 @@ class GerritConnectionSlave(GerritConnection, GerritConnectionReplicationBase):
         self.log.debug("DBG: _processChangeMergedEvent: project %s: review_id: %s" % (project, review_id))
         data = self._findReviewInGerrit(project, review_id)
         if data is None:
-            self.log.debug("DBG: _processChangeMergedEvent: cannot find review - skipped")
-        status = _get_value(data, 'status')
-        if status is None:
-            status = _get_value(data, ['change', 'status'])
-        if status == 'MERGED':
-            self.log.debug("DBG: _processChangeMergedEvent: merged in replica: nothing todo")
-            return
-        self.log.debug("DBG: _processChangeMergedEvent: not merged in replica: abandon and reclone from master")
-        changeid = self._getCurrentChangeId(event)
-        if changeid is None:
-            self.log.debug("DBG: _processChangeMergedEvent: review is not replicated - skipped")
-            return
-        action = {'abandon': True}
-        self._processChangeRestoredOrAbandonedEvent(event, action, changeid)
+            self.log.debug("DBG: _processChangeMergedEvent: cannot find review")
+        else:
+            status = _get_value(data, 'status')
+            if status is None:
+                status = _get_value(data, ['change', 'status'])
+            if status == 'MERGED':
+                self.log.debug("DBG: _processChangeMergedEvent: merged in replica: nothing todo")
+                return
+            self.log.debug("DBG: _processChangeMergedEvent: not merged in replica: abandon and reclone from master")
+            changeid = self._getCurrentChangeId(event)
+            if changeid is None:
+                self.log.debug("DBG: _processChangeMergedEvent: review is not replicated")
+            else:
+                action = {'abandon': True}
+                self._processChangeRestoredOrAbandonedEvent(event, action, changeid)
         self._fullCloneFromMaster(event)
 
     def _processCommentAddedEvent(self, event):
