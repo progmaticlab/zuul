@@ -14,6 +14,8 @@ import threading
 import os
 import re
 import sys
+import paramiko
+
 
 REPLICATE_PROJECTS = [
     'Juniper/contrail-analytics',
@@ -335,6 +337,26 @@ def _get_value(data, field):
     return _get_value(v, field[1:]) if len(field) > 1 else v
 
 
+class GerritConnectionReplicationBase(Object):
+    def _findReviewInGerrit(self, project, review_id): 
+        self.log.debug("DBG: _findReviewInGerrit: project: %s, review_id" % (project, review_id))
+        query = "change:%s" % review_id
+        data = self.simpleQuery(query)
+        self.log.debug("DBG: _findReviewInGerrit: data: %s" % data)
+        for record in data:
+            rid = _get_value(record, 'id')
+            if rid == review_id:
+                status = _get_value(record, 'status')
+                if status is None:
+                    status = _get_value(record, ['change', 'status'])
+                if status == 'ABANDONED':
+                    self.log.debug("DBG: _findReviewInGerrit: skip abandoned")
+                    continue
+                self.log.debug("DBG: _findReviewInGerrit: found: %s" % record)
+                return record
+        return None
+
+
 class GerritEventConnectorSlave(GerritEventConnector):
     log = logging.getLogger("zuul.GerritEventConnectorSlave")
 
@@ -362,7 +384,7 @@ class GerritEventConnectorSlave(GerritEventConnector):
         else:
             time.sleep(self.delay)
 
-class GerritConnectionSlave(GerritConnection):
+class GerritConnectionSlave(GerritConnection, GerritConnectionReplicationBase):
     log = logging.getLogger("zuul.GerritConnectionSlave")
     iolog = logging.getLogger("zuul.GerritConnectionSlave.io")
 
@@ -371,6 +393,7 @@ class GerritConnectionSlave(GerritConnection):
             driver, connection_name, connection_config)
         self.merger = None
         self.master = None
+        self.ssh_gerrit_client = None
 
     def setMaster(self, master):
         self.master = master
@@ -540,23 +563,26 @@ class GerritConnectionSlave(GerritConnection):
         self.log.debug("DBG: _processChangeRestoredOrAbandonedEvent: gerrit review result: %s" % err)
 
     def _processChangeMergedEvent(self, event):
-        # project = _get_value(event, ['change', 'project'])
+        project = _get_value(event, ['change', 'project'])
         review_id = _get_value(event, ['change', 'id'])
-        query = "change:%s" % review_id
-        data = self.simpleQuery(query)
-        self.log.debug("DBG: _processChangeMergedEvent: gerrit review result: %s" % data)
-        # TODO: force merge?
-        # change_number = _get_value(event, ['change', 'number'])
-        # patch_number = _get_value(event, ['patchSet', 'number'])
-        # changeid = '%s,%s' % (change_number, patch_number)
-        # self.log.debug("DBG: _processChangeMergedEvent: %s: %s" % (project, changeid))
-        # action = {
-        #     'verified': '+2',
-        #     'code-review': '+2',
-        #     'approved': '+1'
-        # }
-        # err = self.review(project, changeid, None, action)
-        # self.log.debug("DBG: _processChangeMergedEvent: gerrit review result: %s" % err)
+        self.log.debug("DBG: _processChangeMergedEvent: project %s: review_id: %s" % (project, review_id))
+        data = self._findReviewInGerrit(project, review_id)
+        if data is None:
+            self.log.debug("DBG: _processChangeMergedEvent: cannot find review - skipped")
+        status = _get_value(data, 'status')
+        if status is None:
+            status = _get_value(data, ['change', 'status'])
+        if status == 'MERGED':
+            self.log.debug("DBG: _processChangeMergedEvent: merged in replica: nothing todo")
+            return
+        self.log.debug("DBG: _processChangeMergedEvent: not merged in replica: abandon and reclone from master")
+        changeid = self._getCurrentChangeId(event)
+        if changeid is None:
+            self.log.debug("DBG: _processChangeMergedEvent: review is not replicated - skipped")
+            return
+        action = {'abandon': True}
+        self._processChangeRestoredOrAbandonedEvent(event, action, changeid)
+        self._fullCloneFromMaster(event)
 
     def _processCommentAddedEvent(self, event):
         project = _get_value(event, ['change', 'project'])
@@ -595,6 +621,72 @@ class GerritConnectionSlave(GerritConnection):
         err = self.review(project, changeid, message, actions)
         self.log.debug("DBG: _processChangeMergedEvent: gerrit review result: %s" % err)
 
+
+    def _fullCloneFromMaster(self, event):
+        project = _get_value(event, ['change', 'project'])
+        url = _get_value(event, ['change', 'url'])
+        if not url:
+            self.log.debug("DBG: _fullCloneFromMaster: skip full clone, epmty url for change")
+            return
+        project_path = '/var/gerrit/git/%s.git' % project
+        cmd = "docker exec -t gerrit_gerrit_1 rm -rf %s " % project_path
+        out, err = self._ssh_gerrit_host(cmd)
+        self.log.debug("DBG: _fullCloneFromMaster: rm cur folder: %s: %s" % (out, err))
+        remote = '%s.git' % self._getRemote(project, url)
+        cmd = "docker exec -t gerrit_gerrit_1 git clone --mirror %s %s" % (remote, project_path)
+        out, err = self._ssh_gerrit_host(cmd)
+        self.log.debug("DBG: _fullCloneFromMaster: git clone: %s: %s" % (out, err))
+
+    def _open_ssh_gerrit_host(self):
+        if self.ssh_gerrit_client:
+            # Paramiko needs explicit closes, its possible we will open even
+            # with an unclosed client so explicitly close here.
+            self.ssh_gerrit_client.close()
+        try:
+            client = paramiko.SSHClient()
+            client.load_system_host_keys()
+            client.set_missing_host_key_policy(paramiko.WarningPolicy())
+            client.connect(self.server,
+                           username=self.user,
+                           port=22,
+                           key_filename=self.keyfile)
+            transport = client.get_transport()
+            transport.set_keepalive(self.keepalive)
+            self.ssh_gerrit_client = client
+        except Exception:
+            client.close()
+            self.ssh_gerrit_client = None
+            raise
+
+    def _ssh_gerrit_host(self, command, stdin_data=None):
+        if not self.ssh_gerrit_client:
+            self._open_ssh_gerrit_host()
+
+        try:
+            self.log.debug("SSH command:\n%s" % command)
+            stdin, stdout, stderr = self.ssh_gerrit_client.exec_command(command)
+        except Exception:
+            self._open_ssh_gerrit_host()
+            stdin, stdout, stderr = self.ssh_gerrit_client.exec_command(command)
+
+        if stdin_data:
+            stdin.write(stdin_data)
+
+        out = stdout.read().decode('utf-8')
+        self.iolog.debug("SSH received stdout:\n%s" % out)
+
+        ret = stdout.channel.recv_exit_status()
+        self.log.debug("SSH exit status: %s" % ret)
+
+        err = stderr.read().decode('utf-8')
+        if err.strip():
+            self.log.debug("SSH received stderr:\n%s" % err)
+
+        if ret:
+            self.log.debug("SSH received stdout:\n%s" % out)
+            raise Exception("Gerrit error executing %s" % command)
+        return (out, err)
+
     def _pauseForGerrit(self):
         self.gerrit_event_connector._pauseForGerrit()
 
@@ -616,7 +708,7 @@ class GerritWatcherMaster(GerritWatcher):
             keyfile=keyfile, keepalive=keepalive)
 
 
-class GerritConnectionMaster(GerritConnection):
+class GerritConnectionMaster(GerritConnection, GerritConnectionReplicationBase):
     log = logging.getLogger("zuul.GerritConnectionMaster")
     iolog = logging.getLogger("zuul.GerritConnectionMaster.io")
 
@@ -652,21 +744,7 @@ class GerritConnectionMaster(GerritConnection):
         if review_id is None:
             self.log.debug("DBG: _findCommitInGerrit: review not found")
             return (None, None)
-        query = "change:%s" % review_id
-        data = self.simpleQuery(query)
-        self.log.debug("DBG: _findCommitInGerrit: data: %s" % data)
-        for record in data:
-            rid = _get_value(record, 'id')
-            if rid == review_id:
-                status = _get_value(record, 'status')
-                if status is None:
-                    status = _get_value(record, ['change', 'status'])
-                if status == 'ABANDONED':
-                    self.log.debug("DBG: _findCommitInGerrit: skip abandoned")
-                    continue
-                self.log.debug("DBG: _findCommitInGerrit: return: (%s, %s)" % (review_id, record))
-                return (review_id, record)
-        return (review_id, None)
+        return (review_id, self._findReviewInGerrit(project, review_id))
 
     def _start_watcher_thread(self):
         self.log.debug("DBG: gcm start gwm")
