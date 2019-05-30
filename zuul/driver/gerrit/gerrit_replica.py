@@ -322,7 +322,7 @@ REPLICATE_BRANCHES = [
 COMMENT_PATTERN = 'recheck(( zuulv3)|( no bug))?(\s+clean)?\s*$'
 COMMENT_RE = re.compile(COMMENT_PATTERN, re.MULTILINE)
 
-REVIEW_ID_PATTERN = '\nChange-Id:[ ]*[a-z0-9A-Z]+\n'
+REVIEW_ID_PATTERN = 'Change-Id:[ ]*[a-z0-9A-Z]+'
 REVIEW_ID_RE = re.compile(REVIEW_ID_PATTERN)
 
 
@@ -459,12 +459,14 @@ class GerritConnectionSlave(GerritConnection):
             try_again = False
             for p in _get_value(event, ['patchSet', 'parents']):
                 parent_review_id, parent_event = self._findCommitInGerritMaster(project, p)
-                if parent_event is None:
+                if parent_event is not None:
+                    # pranet found on master
                     parent_changeid = self._getCurrentChangeId(parent_event)
                     if parent_changeid is not None:
                         # parent already commited
                         self.log.debug("DBG: _processPatchSetEvent: parent:  %s: already commited" % parent_review_id)
                         continue
+                    # replicate parent
                     self.log.debug("DBG: _processPatchSetEvent: parent:  %s: try to replicate" % parent_review_id)
                     parent_changeid = self._processPatchSetEvent(parent_event)
                     try_again = parent_changeid is not None
@@ -622,18 +624,23 @@ class GerritConnectionMaster(GerritConnection):
         git_repo = repo.createRepoObject()
         git_repo.git.checkout(commit_id)
         res = REVIEW_ID_RE.search(git_repo.head.commit.message)
+        self.log.debug("DBG: _getReviewIdByCommit: project: %s, commit: %s, message: %s" % (project, commit_id, git_repo.head.commit.message))
         if res is None:
             return None
         return res.group(0).split()[1]
 
-    def _findCommitInGerrit(self, project, commit_id):
+    def _findCommitInGerrit(self, project, commit_id): 
         review_id = self._getReviewIdByCommit(project, commit_id)
         if review_id is None:
+            self.log.debug("DBG: _findCommitInGerrit: review not found")
             return (None, None)
         query = "change:%s" % review_id
         data = self.simpleQuery(query)
+        self.log.debug("DBG: _findCommitInGerrit: data: %s" % data)
         for record in data:
-            if _get_value(record, 'id') == review_id:
+            rid = _get_value(record, 'id')
+            if rid == review_id:
+                self.log.debug("DBG: _findCommitInGerrit: return: (%s, %s)" % (review_id, record))
                 return (review_id, record)
         return (review_id, None)
 
@@ -734,9 +741,11 @@ if __name__ == "__main__":
     try:
         while(True):
             time.sleep(1)
-    except KeyboardInterrupt:
+    except KeyboardInterrupt as e:
+        print("DBG: KeyboardInterrupt: %s" % e)
         connection_slave.onStop()
         connection_master.onStop()
         connection_master.setSlave(None)
         connection_slave.setMaster(None)
+        print("DBG: exit")
         sys.exit(0)
