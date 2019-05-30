@@ -313,10 +313,11 @@ REPLICATE_BRANCHES = [
 #             'sizeInsertions': 33,
 #             'uploader': {'email': 'aswanikr@juniper.net',
 #                         'name': 'aswani kumar',
-#                         'username': 'aswanikumar'}},
-#             'submitter': {'email': 'zuulv3@zuul.opencontrail.org',
-#                             'name': 'Zuul v3 CI',
-#                             'username': 'zuulv3'},
+#                         'username': 'aswanikumar'}
+#          },
+#          'submitter': {'email': 'zuulv3@zuul.opencontrail.org',
+#                   'name': 'Zuul v3 CI',
+#                   'username': 'zuulv3'},
 #     'type': 'change-merged'
 # }
 
@@ -406,6 +407,8 @@ class GerritConnectionSlave(GerritConnection, GerritConnectionReplicationBase):
             return
 
         change_type = _get_value(event, 'type')
+        if change_type is None:
+            change_type = _get_value(event, ['change', 'type'])
 
         if change_type  in ['change-created', 'patchset-created']:
             return self._processPatchSetEvent(event)
@@ -457,9 +460,10 @@ class GerritConnectionSlave(GerritConnection, GerritConnectionReplicationBase):
         return git_repo.head.commit
 
     def _processPatchSetEvent(self, event):
-        project = _get_value(event, ['change', 'project'])
         commit = None
+        project = _get_value(event, ['change', 'project'])
         branch = _get_value(event, ['change', 'branch'])
+        self.log.debug("DBG: _processPatchSetEvent: project=%s, branch=%s" % (project, branch))
         url = _get_value(event, ['change', 'url'])
         ref = _get_value(event, ['patchSet', 'ref'])
         if not url:
@@ -615,12 +619,9 @@ class GerritConnectionSlave(GerritConnection, GerritConnectionReplicationBase):
         if changeid is None:
             # review is not replicated yet, push new
             changeid = self._processPatchSetEvent(event)
-        if changeid is None:
-            self.log.debug("DBG: _processCommentAddedEvent: review is not replicated and failed to replicate - skipped")
             return
         err = self.review(project, changeid, message, actions)
         self.log.debug("DBG: _processChangeMergedEvent: gerrit review result: %s" % err)
-
 
     def _fullCloneFromMaster(self, event):
         project = _get_value(event, ['change', 'project'])
@@ -631,7 +632,7 @@ class GerritConnectionSlave(GerritConnection, GerritConnectionReplicationBase):
         project_path = '/var/gerrit/git/%s.git' % project
         cmd = "docker exec -t gerrit_gerrit_1 rm -rf %s " % project_path
         out, err = self._ssh_gerrit_host(cmd)
-        self.log.debug("DBG: _fullCloneFromMaster: rm cur folder: %s: %s" % (out, err))
+        self.log.debug("DBG: _fullCloneFromMaster: rm cur folder: out: %s: err: %s" % (out, err))
         remote = '%s.git' % self._getRemote(project, url)
         cmd = "docker exec -t gerrit_gerrit_1 git clone --mirror %s %s" % (remote, project_path)
         out, err = self._ssh_gerrit_host(cmd)
