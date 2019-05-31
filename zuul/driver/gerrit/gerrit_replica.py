@@ -4,9 +4,6 @@ from zuul.driver.gerrit.gerritmodel import GerritChange, GerritTriggerEvent
 
 from zuul.merger import merger
 
-import git
-
-import queue
 import logging
 import time
 import urllib
@@ -15,6 +12,8 @@ import os
 import re
 import sys
 import paramiko
+
+import argparse
 
 
 REPLICATE_PROJECTS = [
@@ -337,7 +336,7 @@ def _get_value(data, field):
     return _get_value(v, field[1:]) if len(field) > 1 else v
 
 
-class GerritConnectionReplicationBase:
+class GerritConnectionReplicationBase(GerritConnection):
     def _findReviewInGerrit(self, project, review_id): 
         self.log.debug("DBG: _findReviewInGerrit: project: %s, %s" % (project, review_id))
         query = "change:%s" % review_id
@@ -384,7 +383,7 @@ class GerritEventConnectorSlave(GerritEventConnector):
         else:
             time.sleep(self.delay)
 
-class GerritConnectionSlave(GerritConnection, GerritConnectionReplicationBase):
+class GerritConnectionSlave(GerritConnectionReplicationBase):
     log = logging.getLogger("zuul.GerritConnectionSlave")
     iolog = logging.getLogger("zuul.GerritConnectionSlave.io")
 
@@ -541,6 +540,12 @@ class GerritConnectionSlave(GerritConnection, GerritConnectionReplicationBase):
             return
         self._processChangeRestoredOrAbandonedEvent(event, action, changeid)
 
+    def _formatCurrentChangeId(self, event):
+        change_number = _get_value(event, ['number'])
+        patch_number = _get_value(event, ['currentPatchSet', 'number'])
+        changeid = '%s,%s' % (change_number, patch_number)
+        return changeid
+
     def _getCurrentChangeId(self, event):
         review_id = _get_value(event, ['change', 'id'])
         query = "change:%s" % review_id
@@ -548,9 +553,9 @@ class GerritConnectionSlave(GerritConnection, GerritConnectionReplicationBase):
         changeid = None
         for record in data:
             if _get_value(record, 'id') == review_id:
-                change_number = _get_value(record, ['number'])
-                patch_number = _get_value(record, ['currentPatchSet', 'number'])
-                changeid = '%s,%s' % (change_number, patch_number)
+                changeid = self._formatCurrentChangeId(record)
+                if changeid is not None:
+                    break
         return changeid
 
     def _findCommitInGerritMaster(self, project, commit_id):
@@ -688,6 +693,19 @@ class GerritConnectionSlave(GerritConnection, GerritConnectionReplicationBase):
             raise Exception("Gerrit error executing %s" % command)
         return (out, err)
 
+    def abandonAll(self):
+        self.log.debug("DBG: abandonAll")
+        query = "owner:%s status:open" % self.user
+        data = self.simpleQuery(query)
+        action = {'abandon': True}
+        for record in data:
+            changeid = self._formatCurrentChangeId(record)
+            if changeid is None:
+                self.log.debug("DBG: abandonAll: cannot get changeid - skipped")
+                continue
+            self._processChangeRestoredOrAbandonedEvent(event, action, changeid)
+
+
     def _pauseForGerrit(self):
         self.gerrit_event_connector._pauseForGerrit()
 
@@ -709,7 +727,7 @@ class GerritWatcherMaster(GerritWatcher):
             keyfile=keyfile, keepalive=keepalive)
 
 
-class GerritConnectionMaster(GerritConnection, GerritConnectionReplicationBase):
+class GerritConnectionMaster(GerritConnectionReplicationBase):
     log = logging.getLogger("zuul.GerritConnectionMaster")
     iolog = logging.getLogger("zuul.GerritConnectionMaster.io")
 
@@ -776,6 +794,11 @@ class ConnectionRegistry(object):
 
 
 if __name__ == "__main__":
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('cmd', default='sync')
+    args = parser.parse_args()
+
     logging.basicConfig(level=logging.DEBUG)
 
     config_master = {
@@ -833,22 +856,27 @@ if __name__ == "__main__":
         registry, merge_email, merge_name,
         speed_limit, speed_time)
 
-    connection_slave.setMerger(merger_slave)
-    connection_slave.setMaster(connection_master)
-    connection_slave.onLoad()
+    if args.cmd == 'sync':
+        connection_slave.setMerger(merger_slave)
+        connection_slave.setMaster(connection_master)
+        connection_slave.onLoad()
 
-    connection_master.setMerger(merger_master)
-    connection_master.setSlave(connection_slave)
-    connection_master.onLoad()
+        connection_master.setMerger(merger_master)
+        connection_master.setSlave(connection_slave)
+        connection_master.onLoad()
 
-    try:
-        while(True):
-            time.sleep(1)
-    except KeyboardInterrupt as e:
-        print("DBG: KeyboardInterrupt: %s" % e)
-        connection_slave.onStop()
-        connection_master.onStop()
-        connection_master.setSlave(None)
-        connection_slave.setMaster(None)
-        print("DBG: exit")
-        sys.exit(0)
+        try:
+            while(True):
+                time.sleep(1)
+        except KeyboardInterrupt as e:
+            print("DBG: KeyboardInterrupt: %s" % e)
+
+    elif args.cmd == 'abandon_synced_reviews':
+        connection_slave.abandonAll()
+
+    connection_slave.onStop()
+    connection_master.onStop()
+    connection_master.setSlave(None)
+    connection_slave.setMaster(None)
+    print("DBG: exit")
+    sys.exit(0)
