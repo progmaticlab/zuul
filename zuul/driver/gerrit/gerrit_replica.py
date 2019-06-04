@@ -515,7 +515,7 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
             changeid = self._getCurrentChangeId(event)
         return changeid
 
-    def _processChangeRestoredEvent(self, event, message='rechek'):
+    def _processChangeRestoredEvent(self, event, message='recheck'):
         action = {'restore': True}
         changeid = self._getCurrentChangeId(event)
         if changeid is None:
