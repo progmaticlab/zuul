@@ -559,8 +559,11 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
         project = _get_value(event, ['change', 'project'])
         review_id = _get_value(event, ['change', 'id'])
         self.log.debug("DBG: _processChangeRestoredOrAbandonedEvent: %s: %s: %s" % (project, review_id, action))
-        err = self.review(project, changeid, message, action)
+        err = self.review(project, changeid, None, action)
         self.log.debug("DBG: _processChangeRestoredOrAbandonedEvent: gerrit review result: %s" % err)
+        if message is not None:
+            err = self.review(project, changeid, message)
+            self.log.debug("DBG: _processChangeRestoredOrAbandonedEvent: gerrit review result: %s" % err)
 
     def _processChangeMergedEvent(self, event):
         project = _get_value(event, ['change', 'project'])
