@@ -515,14 +515,14 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
             changeid = self._getCurrentChangeId(event)
         return changeid
 
-    def _processChangeRestoredEvent(self, event):
+    def _processChangeRestoredEvent(self, event, message='rechek'):
         action = {'restore': True}
         changeid = self._getCurrentChangeId(event)
         if changeid is None:
             # push as new
             self._processPatchSetEvent(event)
         else:
-            self._processChangeRestoredOrAbandonedEvent(event, action, changeid)
+            self._processChangeRestoredOrAbandonedEvent(event, action, changeid, message=message)
 
     def _processChangeAbandonedEvent(self, event):
         action = {'abandon': True}
@@ -555,11 +555,11 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
             return self.master._findCommitInGerrit(project, commit_id)
         return (None, None)
 
-    def _processChangeRestoredOrAbandonedEvent(self, event, action, changeid):
+    def _processChangeRestoredOrAbandonedEvent(self, event, action, changeid, message=None):
         project = _get_value(event, ['change', 'project'])
         review_id = _get_value(event, ['change', 'id'])
         self.log.debug("DBG: _processChangeRestoredOrAbandonedEvent: %s: %s: %s" % (project, review_id, action))
-        err = self.review(project, changeid, None, action)
+        err = self.review(project, changeid, message, action)
         self.log.debug("DBG: _processChangeRestoredOrAbandonedEvent: gerrit review result: %s" % err)
 
     def _processChangeMergedEvent(self, event):
