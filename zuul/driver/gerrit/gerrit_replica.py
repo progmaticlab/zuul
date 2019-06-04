@@ -486,23 +486,7 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
                 parent_review_id, parent_event = self._findCommitInGerritMaster(project, p)
                 if parent_event is not None:
                     #patch parent event if it has no change inside )it is for merged changes)
-                    change = _get_value(parent_event, 'change')
-                    if change is None:
-                        change = {}
-                        change['id'] = parent_review_id
-                        change['project'] = _get_value(parent_event, 'project')
-                        change['branch'] = _get_value(parent_event, 'branch')
-                        change['number'] = _get_value(parent_event, 'number')
-                        change['url'] = _get_value(parent_event, 'url')
-                        change['commitMessage'] = _get_value(parent_event, 'commitMessage')
-                        parent_event['change'] = change
-                    patchSet = _get_value(parent_event, 'patchSet')
-                    if patchSet is None:
-                        patchSet = {}
-                        patchSet['number'] = _get_value(parent_event, ['currentPatchSet', 'number'])
-                        patchSet['ref'] = _get_value(parent_event, ['currentPatchSet', 'ref'])
-                        patchSet['parents'] = _get_value(parent_event, ['currentPatchSet', 'parents'])
-                        parent_event['patchSet'] = patchSet
+                    parent_event = self._currentPatchSet2ChangeEvent(parent_event)
                     # pranet found on master
                     parent_changeid = self._getCurrentChangeId(parent_event)
                     if parent_changeid is not None:
@@ -706,17 +690,7 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
                 continue
             self._processChangeRestoredOrAbandonedEvent(event, action, changeid)
 
-    def pushAllOpenedReviews(self):
-        self.log.debug("DBG: pushAllOpenedReviews")
-        for p in REPLICATE_PROJECTS:
-            data = self.master._getAllOpenedReviews(p)
-            for record in data:
-                if self._filterEvent(record):
-                    continue
-                self._pushReviewFromMaster(record)
-
-    def _pushReviewFromMaster(self, data):
-        #patch parent event if it has no change inside )it is for merged changes)
+    def _currentPatchSet2ChangeEvent(self, data):
         change = _get_value(data, 'change')
         if change is None:
             change = {}
@@ -734,7 +708,18 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
             patchSet['ref'] = _get_value(data, ['currentPatchSet', 'ref'])
             patchSet['parents'] = _get_value(data, ['currentPatchSet', 'parents'])
             data['patchSet'] = patchSet
-        self._processPatchSetEvent(data)
+        return data
+
+    def pushAllOpenedReviews(self):
+        self.log.debug("DBG: pushAllOpenedReviews")
+        for p in REPLICATE_PROJECTS:
+            data = self.master._getAllOpenedReviews(p)
+            for record in data:
+                event = self._currentPatchSet2ChangeEvent(record)
+                if self._filterEvent(event):
+                    continue
+                self._fullCloneFromMaster(event)
+                self._processPatchSetEvent(event)
 
     def _pauseForGerrit(self):
         self.gerrit_event_connector._pauseForGerrit()
