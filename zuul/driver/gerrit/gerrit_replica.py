@@ -748,8 +748,12 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
                 if self._filterEvent(event):
                     continue
                 events_list += [event]
+        projects = []
         for event in events_list:
-            self._fullCloneFromMaster(event)
+            prj = _get_value(event, 'project')
+            if prj not in projects:
+                projects += [prj]
+                self._fullCloneFromMaster(event)
 
     def _pauseForGerrit(self):
         if self.gerrit_event_connector:
