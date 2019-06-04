@@ -706,6 +706,35 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
                 continue
             self._processChangeRestoredOrAbandonedEvent(event, action, changeid)
 
+    def pushAllOpenedReviews(self):
+        self.log.debug("DBG: pushAllOpenedReviews")
+        for p in REPLICATE_PROJECTS:
+            data = self.master._getAllOpenedReviews(p)
+            for record in data:
+                if self._filterEvent(record):
+                    continue
+                self._pushReviewFromMaster(record)
+
+    def _pushReviewFromMaster(self, data):
+        #patch parent event if it has no change inside )it is for merged changes)
+        change = _get_value(data, 'change')
+        if change is None:
+            change = {}
+            change['id'] = _get_value(data, 'id')
+            change['project'] = _get_value(data, 'project')
+            change['branch'] = _get_value(data, 'branch')
+            change['number'] = _get_value(data, 'number')
+            change['url'] = _get_value(data, 'url')
+            change['commitMessage'] = _get_value(data, 'commitMessage')
+            data['change'] = change
+        patchSet = _get_value(data, 'patchSet')
+        if patchSet is None:
+            patchSet = {}
+            patchSet['number'] = _get_value(data, ['currentPatchSet', 'number'])
+            patchSet['ref'] = _get_value(data, ['currentPatchSet', 'ref'])
+            patchSet['parents'] = _get_value(data, ['currentPatchSet', 'parents'])
+            data['patchSet'] = patchSet
+        self._processPatchSetEvent(data)
 
     def _pauseForGerrit(self):
         self.gerrit_event_connector._pauseForGerrit()
@@ -758,6 +787,11 @@ class GerritConnectionMaster(GerritConnectionReplicationBase):
         if res is None:
             return None
         return res.group(0).split()[1]
+
+    def _getAllOpenedReviews(self, project):
+        query = "project:%s status:open" % project
+        data = self.simpleQuery(query)
+        return data
 
     def _findCommitInGerrit(self, project, commit_id): 
         review_id = self._getReviewIdByCommit(project, commit_id)
@@ -857,13 +891,12 @@ if __name__ == "__main__":
         registry, merge_email, merge_name,
         speed_limit, speed_time)
 
+    connection_slave.setMaster(connection_master)
+    connection_slave.setMerger(merger_slave)
+    connection_master.setMerger(merger_master)
+    connection_master.setSlave(connection_slave)
     if args.cmd == 'sync':
-        connection_slave.setMerger(merger_slave)
-        connection_slave.setMaster(connection_master)
         connection_slave.onLoad()
-
-        connection_master.setMerger(merger_master)
-        connection_master.setSlave(connection_slave)
         connection_master.onLoad()
 
         try:
@@ -874,6 +907,8 @@ if __name__ == "__main__":
 
     elif args.cmd == 'abandon_synced_reviews':
         connection_slave.abandonAll()
+    elif args.cmd == 'push_opened_reviews':
+        connection_slave.pushAllOpenedReviews()
 
     connection_slave.onStop()
     connection_master.onStop()
