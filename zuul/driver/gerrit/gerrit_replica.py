@@ -355,6 +355,11 @@ class GerritConnectionReplicationBase(GerritConnection):
                 return record
         return None
 
+    def _getAllOpenedReviews(self, project):
+        query = "project:%s status:open" % project
+        data = self.simpleQuery(query)
+        return data
+
 
 class GerritEventConnectorSlave(GerritEventConnector):
     log = logging.getLogger("zuul.GerritEventConnectorSlave")
@@ -560,22 +565,21 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
         self.log.debug("DBG: _processChangeMergedEvent: project %s: review_id: %s" % (project, review_id))
         data = self._findReviewInGerrit(project, review_id)
         if data is None:
-            self.log.debug("DBG: _processChangeMergedEvent: cannot find review")
-        else:
-            status = _get_value(data, 'status')
-            if status is None:
-                status = _get_value(data, ['change', 'status'])
-            if status == 'MERGED':
-                self.log.debug("DBG: _processChangeMergedEvent: merged in replica: nothing todo")
-                return
-            self.log.debug("DBG: _processChangeMergedEvent: not merged in replica: abandon and reclone from master")
-            changeid = self._getCurrentChangeId(event)
-            if changeid is None:
-                self.log.debug("DBG: _processChangeMergedEvent: review is not replicated")
-            else:
-                action = {'abandon': True}
-                self._processChangeRestoredOrAbandonedEvent(event, action, changeid)
-        self._fullCloneFromMaster(event)
+            self.log.debug("DBG: _processChangeMergedEvent: cannot find review: nothing todo")
+            return
+        status = _get_value(data, 'status')
+        if status is None:
+            status = _get_value(data, ['change', 'status'])
+        if status == 'MERGED':
+            self.log.debug("DBG: _processChangeMergedEvent: merged in replica: nothing todo")
+            return
+        changeid = self._getCurrentChangeId(event)
+        if changeid is None:
+            self.log.debug("DBG: _processChangeMergedEvent: review is not replicated")
+            return
+        self.log.debug("DBG: _processChangeMergedEvent: FORCE_VERIVIED")
+        action = {'verified': True}
+        self._processChangeRestoredOrAbandonedEvent(event, action, changeid)
 
     def _processCommentAddedEvent(self, event):
         project = _get_value(event, ['change', 'project'])
@@ -590,9 +594,8 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
                 v = _get_value(a, 'value')
                 if t == 'Code-Review':
                     actions['code-review'] = v
-# SKIP APPROVED TO AVOID MERGES
-                # elif t == 'Approved':
-                #     actions['approved'] = v
+                elif t == 'Approved':
+                    actions['approved'] = v
                 else:
                     self.log.debug("DBG: _processCommentAddedEvent: skip approval type: %s" % t)
                     return
@@ -688,6 +691,7 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
             if changeid is None:
                 self.log.debug("DBG: abandonAll: cannot get changeid - skipped")
                 continue
+            event = self._currentPatchSet2ChangeEvent(record)
             self._processChangeRestoredOrAbandonedEvent(event, action, changeid)
 
     def _currentPatchSet2ChangeEvent(self, data):
@@ -712,14 +716,35 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
 
     def pushAllOpenedReviews(self):
         self.log.debug("DBG: pushAllOpenedReviews")
+        events_list = []
         for p in REPLICATE_PROJECTS:
             data = self.master._getAllOpenedReviews(p)
             for record in data:
                 event = self._currentPatchSet2ChangeEvent(record)
                 if self._filterEvent(event):
                     continue
-                self._fullCloneFromMaster(event)
-                self._processPatchSetEvent(event)
+                events_list += event
+        for event in events_list:
+            self._processPatchSetEvent(event)
+
+    def recloneProjectsWithOpenedReviews(self):
+        self.log.debug("DBG: recloneProjectsWithOpenedReviews")
+        events_list = []
+        for p in REPLICATE_PROJECTS:
+            data = self._getAllOpenedReviews(p)
+            if len(data) > 0:
+                # skip if there are opened reviews otherwise replacing git repo
+                # leads to broken gerrit
+                self.log.debug("DBG: recloneProjectsWithOpenedReviews: skip %s becase it has opened reviews")
+                continue
+            data = self.master._getAllOpenedReviews(p)
+            for record in data:
+                event = self._currentPatchSet2ChangeEvent(record)
+                if self._filterEvent(event):
+                    continue
+                events_list += event
+        for event in events_list:
+            self._fullCloneFromMaster(event)
 
     def _pauseForGerrit(self):
         if self.gerrit_event_connector:
@@ -773,11 +798,6 @@ class GerritConnectionMaster(GerritConnectionReplicationBase):
         if res is None:
             return None
         return res.group(0).split()[1]
-
-    def _getAllOpenedReviews(self, project):
-        query = "project:%s status:open" % project
-        data = self.simpleQuery(query)
-        return data
 
     def _findCommitInGerrit(self, project, commit_id): 
         review_id = self._getReviewIdByCommit(project, commit_id)
@@ -895,6 +915,8 @@ if __name__ == "__main__":
         connection_slave.abandonAll()
     elif args.cmd == 'push_opened_reviews':
         connection_slave.pushAllOpenedReviews()
+    elif args.cmd == 'reclone_for_opened_reviews':
+        connection_slave.recloneProjectsWithOpenedReviews()
 
     connection_slave.onStop()
     connection_master.onStop()
