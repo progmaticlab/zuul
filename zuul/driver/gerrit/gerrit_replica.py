@@ -583,8 +583,11 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
             self.log.debug("DBG: _processChangeMergedEvent: review is not replicated")
             return
         self.log.debug("DBG: _processChangeMergedEvent: FORCE_VERIVIED")
-        action = {'verified': True}
-        self._processChangeRestoredOrAbandonedEvent(event, action, changeid)
+        actions = {
+            'code-review': '2',
+            'approved': '1'
+        }
+        self._processChangeRestoredOrAbandonedEvent(event, actions, changeid)
 
     def _processCommentAddedEvent(self, event):
         project = _get_value(event, ['change', 'project'])
