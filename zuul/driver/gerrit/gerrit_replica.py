@@ -467,7 +467,7 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
             git_repo.git.commit('--amend', '--reset-author', '--no-edit')
         return git_repo.head.commit
 
-    def _processPatchSetEvent(self, event):
+    def _processPatchSetEvent(self, event, process_parents=True):
         commit = None
         project = _get_value(event, ['change', 'project'])
         branch = _get_value(event, ['change', 'branch'])
@@ -489,32 +489,36 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
         repo.push('HEAD', 'refs/publish/%s' % branch)
         self._pauseForGerrit()
         changeid = self._getCurrentChangeId(event)
-        if changeid is None:
-            # try push parent (TODO: for one only first parent)
-            try_again = False
-            for p in _get_value(event, ['patchSet', 'parents']):
-                parent_review_id, parent_event = self._findCommitInGerritMaster(project, p)
-                if parent_event is not None:
-                    #patch parent event if it has no change inside )it is for merged changes)
-                    parent_event = self._currentPatchSet2ChangeEvent(parent_event)
-                    # pranet found on master
-                    parent_changeid = self._getCurrentChangeId(parent_event)
-                    if parent_changeid is not None:
-                        # parent already commited
-                        self.log.debug("DBG: _processPatchSetEvent: parent:  %s: already commited" % parent_review_id)
-                        continue
-                    # replicate parent
-                    self.log.debug("DBG: _processPatchSetEvent: parent:  %s: try to replicate" % parent_review_id)
-                    parent_changeid = self._processPatchSetEvent(parent_event)
-                    try_again = parent_changeid is not None
-            if try_again:
-                # try to push commit again
-                self.log.debug("DBG: _processPatchSetEvent: retry to push")
-                git_repo = repo.createRepoObject()
-                git_repo.git.checkout(commit)
-                repo.push('HEAD', 'refs/publish/%s' % branch)
-                self._pauseForGerrit()
-                changeid = self._getCurrentChangeId(event)
+        if changeid is not None:
+            return changeid
+        self.log.debug("DBG: _processPatchSetEvent: push failed for %s" % url)
+        if not process_parents:
+            return changeid
+        # try push parent (TODO: for one only first parent)
+        try_again = False
+        for p in _get_value(event, ['patchSet', 'parents']):
+            parent_review_id, parent_event = self._findCommitInGerritMaster(project, p)
+            if parent_event is not None:
+                #patch parent event if it has no change inside )it is for merged changes)
+                parent_event = self._currentPatchSet2ChangeEvent(parent_event)
+                # pranet found on master
+                parent_changeid = self._getCurrentChangeId(parent_event)
+                if parent_changeid is not None:
+                    # parent already commited
+                    self.log.debug("DBG: _processPatchSetEvent: parent:  %s: already commited" % parent_review_id)
+                    continue
+                # replicate parent
+                self.log.debug("DBG: _processPatchSetEvent: parent:  %s: try to replicate" % parent_review_id)
+                parent_changeid = self._processPatchSetEvent(parent_event)
+                try_again = parent_changeid is not None
+        if try_again:
+            # try to push commit again
+            self.log.debug("DBG: _processPatchSetEvent: retry to push")
+            git_repo = repo.createRepoObject()
+            git_repo.git.checkout(commit)
+            repo.push('HEAD', 'refs/publish/%s' % branch)
+            self._pauseForGerrit()
+            changeid = self._getCurrentChangeId(event)
         return changeid
 
     def _processChangeRestoredEvent(self, event):
@@ -736,7 +740,7 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
             project = _get_value(event, ['change', 'project'])
             review_id = _get_value(event, ['change', 'id'])
             if self._findReviewInGerrit(project, review_id) is None:
-                self._processPatchSetEvent(event)
+                self._processPatchSetEvent(event, process_parents=False)
             else:
                 self.log.debug("DBG: pushAllOpenedReviews: review_id %s already pushed - skipped" % review_id)
 
