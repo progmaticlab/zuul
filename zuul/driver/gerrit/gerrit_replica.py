@@ -606,8 +606,9 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
                 v = _get_value(a, 'value')
                 if t == 'Code-Review':
                     actions['code-review'] = v
-                elif t == 'Approved':
-                    actions['approved'] = v
+# SKIP APPROVED TO AVOID MERGES
+                # elif t == 'Approved':
+                #     actions['approved'] = v
                 else:
                     self.log.debug("DBG: _processCommentAddedEvent: skip approval type: %s" % t)
                     return
