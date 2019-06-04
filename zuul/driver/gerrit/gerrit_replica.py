@@ -357,9 +357,14 @@ class GerritConnectionReplicationBase(GerritConnection):
 
     def _getAllOpenedReviews(self, project):
         query = "project:%s status:open" % project
-        data = self.simpleQuery(query)
-        return data
-
+        for i in range(1, 3):
+            try:
+                data = self.simpleQuery(query)
+                return data
+            except Exception as e:
+                if i == 3:
+                    self.log.debug("DBG: _getAllOpenedReviews: Exception: %s" % e)
+        return []                
 
 class GerritEventConnectorSlave(GerritEventConnector):
     log = logging.getLogger("zuul.GerritEventConnectorSlave")
