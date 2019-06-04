@@ -345,12 +345,6 @@ class GerritConnectionReplicationBase(GerritConnection):
         for record in data:
             rid = _get_value(record, 'id')
             if rid == review_id:
-                status = _get_value(record, 'status')
-                if status is None:
-                    status = _get_value(record, ['change', 'status'])
-                if status == 'ABANDONED':
-                    self.log.debug("DBG: _findReviewInGerrit: skip abandoned")
-                    continue
                 self.log.debug("DBG: _findReviewInGerrit: found: %s" % record)
                 return record
         return None
@@ -739,10 +733,18 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
         for event in events_list:
             project = _get_value(event, ['change', 'project'])
             review_id = _get_value(event, ['change', 'id'])
-            if self._findReviewInGerrit(project, review_id) is None:
+            data = self._findReviewInGerrit(project, review_id)
+            if data is None:
                 self._processPatchSetEvent(event, process_parents=False)
             else:
-                self.log.debug("DBG: pushAllOpenedReviews: review_id %s already pushed - skipped" % review_id)
+                status = _get_value(record, 'status')
+                if status is None:
+                    status = _get_value(record, ['change', 'status'])
+                if status == 'ABANDONED':
+                    # restore event
+                    self._processChangeRestoredEvent(event)
+                else:
+                    self.log.debug("DBG: pushAllOpenedReviews: review_id %s already pushed - skipped" % review_id)
 
     def recloneProjectsWithOpenedReviews(self):
         self.log.debug("DBG: recloneProjectsWithOpenedReviews")
