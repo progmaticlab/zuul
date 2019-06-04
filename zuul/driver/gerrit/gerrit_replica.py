@@ -723,7 +723,7 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
                 event = self._currentPatchSet2ChangeEvent(record)
                 if self._filterEvent(event):
                     continue
-                events_list += event
+                events_list += [event]
         for event in events_list:
             self._processPatchSetEvent(event)
 
