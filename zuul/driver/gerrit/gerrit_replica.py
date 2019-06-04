@@ -722,7 +722,8 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
                 self._processPatchSetEvent(event)
 
     def _pauseForGerrit(self):
-        self.gerrit_event_connector._pauseForGerrit()
+        if self.gerrit_event_connector:
+            self.gerrit_event_connector._pauseForGerrit()
 
     def _start_watcher_thread(self):
         pass
