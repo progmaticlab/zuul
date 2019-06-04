@@ -730,7 +730,12 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
                     continue
                 events_list += [event]
         for event in events_list:
-            self._processPatchSetEvent(event)
+            project = _get_value(event, ['change', 'project'])
+            review_id = _get_value(event, ['change', 'id'])
+            if self._findReviewInGerrit(project, review_id) is None:
+                self._processPatchSetEvent(event)
+            else:
+                self.log.debug("DBG: pushAllOpenedReviews: review_id %s already pushed - skipped" % review_id)
 
     def recloneProjectsWithOpenedReviews(self):
         self.log.debug("DBG: recloneProjectsWithOpenedReviews")
@@ -801,12 +806,16 @@ class GerritConnectionMaster(GerritConnectionReplicationBase):
     def _getReviewIdByCommit(self, project, commit_id):
         repo = self.merger.getRepo(self.connection_name, project)
         git_repo = repo.createRepoObject()
-        git_repo.git.checkout(commit_id)
-        res = REVIEW_ID_RE.search(git_repo.head.commit.message)
-        self.log.debug("DBG: _getReviewIdByCommit: project: %s, commit: %s, message: %s" % (project, commit_id, git_repo.head.commit.message))
-        if res is None:
+        try:
+            git_repo.git.checkout(commit_id)
+            res = REVIEW_ID_RE.search(git_repo.head.commit.message)
+            self.log.debug("DBG: _getReviewIdByCommit: project: %s, commit: %s, message: %s" % (project, commit_id, git_repo.head.commit.message))
+            if res is None:
+                return None
+            return res.group(0).split()[1]
+        except Exception as e:
+            self.log.debug("DBG: _getReviewIdByCommit: Project: %s, Commit: %s Exception: %s" % (project, commit_id, e))
             return None
-        return res.group(0).split()[1]
 
     def _findCommitInGerrit(self, project, commit_id): 
         review_id = self._getReviewIdByCommit(project, commit_id)
