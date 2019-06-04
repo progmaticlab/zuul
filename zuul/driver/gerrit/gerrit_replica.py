@@ -737,14 +737,14 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
             if data is None:
                 self._processPatchSetEvent(event, process_parents=False)
             else:
-                status = _get_value(record, 'status')
+                status = _get_value(data, 'status')
                 if status is None:
-                    status = _get_value(record, ['change', 'status'])
+                    status = _get_value(data, ['change', 'status'])
                 if status == 'ABANDONED':
                     # restore event
                     self._processChangeRestoredEvent(event)
                 else:
-                    self.log.debug("DBG: pushAllOpenedReviews: review_id %s already pushed - skipped" % review_id)
+                    self.log.debug("DBG: pushAllOpenedReviews: review_id %s , status = %s : already pushed - skipped" % (review_id, status))
 
     def recloneProjectsWithOpenedReviews(self):
         self.log.debug("DBG: recloneProjectsWithOpenedReviews")
