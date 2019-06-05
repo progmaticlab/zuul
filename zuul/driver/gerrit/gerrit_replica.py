@@ -721,6 +721,11 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
             patchSet['ref'] = _get_value(data, ['currentPatchSet', 'ref'])
             patchSet['parents'] = _get_value(data, ['currentPatchSet', 'parents'])
             data['patchSet'] = patchSet
+        approvals = _get_value(data, 'approvals')
+        if approvals is None:
+            approvals = _get_value(data, ['currentPatchSet', 'approvals'])
+            if approvals is not None:
+                data['approvals'] = approvals
         return data
 
     def pushAllOpenedReviews(self):
