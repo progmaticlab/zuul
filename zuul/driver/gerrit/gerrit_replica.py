@@ -772,6 +772,36 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
                 projects += [prj]
                 self._fullCloneFromMaster(event)
 
+    def recheckFailedOpenedReviews(self):
+        self.log.debug("DBG: recheckOpenedReviews")
+        events_list = []
+        for p in REPLICATE_PROJECTS:
+            data = self.master._getAllOpenedReviews(p)
+            for record in data:
+                event = self._currentPatchSet2ChangeEvent(record)
+                if self._filterEvent(event):
+                    continue
+                approvals = _get_value(event, 'approvals')
+                if approvals is None:
+                    self.log.debug("DBG: recheckOpenedReviews: no approvals yet: skipped")
+                    continue
+                verified=''
+                for a in approvals:
+                    if _get_value(a, 'type') != 'Verified':
+                        continue
+                    verified = _get_value(a, 'value')
+                    break
+                if verified != '-1':
+                    self.log.debug("DBG: recheckOpenedReviews: verified approvals %s: skipped" % verified)
+                    continue
+                events_list += [event]
+        for event in events_list:
+            project = _get_value(event, 'project')
+            changeid = self._formatCurrentChangeId(event)
+            err = self.review(project, changeid, 'recheck')
+            self.log.debug("DBG: recheckFailedOpenedReviews: gerrit review recheck: %s" % err)
+
+
     def _pauseForGerrit(self):
         if self.gerrit_event_connector:
             self.gerrit_event_connector._pauseForGerrit()
@@ -947,6 +977,8 @@ if __name__ == "__main__":
         connection_slave.pushAllOpenedReviews()
     elif args.cmd == 'reclone_for_opened_reviews':
         connection_slave.recloneProjectsWithOpenedReviews()
+    elif args.cmd == 'recheck_failed_opened_reviews':
+        connection_slave.recheckFailedOpenedReviews()
 
     connection_slave.onStop()
     connection_master.onStop()
