@@ -800,6 +800,7 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
                     self.log.debug("DBG: recheckOpenedReviews: verified approvals %s: skipped" % verified)
                     continue
                 events_list += [event]
+        self.log.debug("DBG: recheckOpenedReviews: events_list: %s" % events_list)
         for event in events_list:
             project = _get_value(event, 'project')
             changeid = self._formatCurrentChangeId(event)
