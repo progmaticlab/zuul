@@ -776,7 +776,7 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
         self.log.debug("DBG: recheckOpenedReviews")
         events_list = []
         for p in REPLICATE_PROJECTS:
-            data = self.master._getAllOpenedReviews(p)
+            data = self._getAllOpenedReviews(p)
             for record in data:
                 event = self._currentPatchSet2ChangeEvent(record)
                 if self._filterEvent(event):
