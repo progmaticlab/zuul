@@ -47,7 +47,6 @@ REPLICATE_PROJECTS = [
       "Juniper/contrail-nova-vif-driver",
       "Juniper/contrail-packages",
       "Juniper/contrail-packaging",
-      "Juniper/contrail-project-config",
       "Juniper/contrail-provisioning",
       "Juniper/contrail-publisher",
       "Juniper/contrail-puppet",
@@ -76,7 +75,6 @@ REPLICATE_PROJECTS = [
       "Juniper/contrail-windows",
       "Juniper/contrail-windows-docker-driver",
       "Juniper/contrail-windows-test",
-      "Juniper/contrail-zuul-jobs",
       "Juniper/horizon",
       "Juniper/nova",
       "Juniper/openshift-ansible",
@@ -85,6 +83,9 @@ REPLICATE_PROJECTS = [
       "Juniper/puppet-contrail",
       "Juniper/vijava",
 ]
+    # Dont track
+    #   "Juniper/contrail-project-config",
+    #   "Juniper/contrail-zuul-jobs",
 
 
 REPLICATE_BRANCHES = [
