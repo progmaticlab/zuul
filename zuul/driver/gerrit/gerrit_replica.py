@@ -17,7 +17,6 @@ import argparse
 
 
 REPLICATE_PROJECTS = [
-      "Juniper/contrail",
       "Juniper/contrail-analytics",
       "Juniper/contrail-ansible",
       "Juniper/contrail-ansible-deployer",
