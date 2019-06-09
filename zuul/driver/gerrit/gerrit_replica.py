@@ -721,19 +721,6 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
             raise Exception("Gerrit error executing %s" % command)
         return (out, err)
 
-    def abandonAll(self):
-        self.log.debug("DBG: abandonAll")
-        query = "owner:%s status:open" % self.user
-        data = self.simpleQuery(query)
-        action = {'abandon': True}
-        for record in data:
-            changeid = self._formatCurrentChangeId(record)
-            if changeid is None:
-                self.log.debug("DBG: abandonAll: cannot get changeid - skipped")
-                continue
-            event = self._currentPatchSet2ChangeEvent(record)
-            self._processChangeRestoredOrAbandonedEvent(event, action, changeid)
-
     def _currentPatchSet2ChangeEvent(self, data):
         change = _get_value(data, 'change')
         if change is None:
@@ -759,12 +746,33 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
                 data['approvals'] = approvals
         return data
 
-    def pushAllOpenedReviews(self):
+    def abandonAll(self, projects=None):
+        self.log.debug("DBG: abandonAll")
+        query = "owner:%s status:open" % self.user
+        data = self.simpleQuery(query)
+        action = {'abandon': True}
+        for record in data:
+            prj = _get_value(record, 'project')
+            if projects is not None and prj not in projects:
+                self.log.debug("DBG: abandonAll: %s skipped" % prj)
+                continue
+            changeid = self._formatCurrentChangeId(record)
+            if changeid is None:
+                self.log.debug("DBG: abandonAll: cannot get changeid - skipped")
+                continue
+            event = self._currentPatchSet2ChangeEvent(record)
+            self._processChangeRestoredOrAbandonedEvent(event, action, changeid)
+
+    def pushAllOpenedReviews(self, projects=None):
         self.log.debug("DBG: pushAllOpenedReviews")
-        events_list = []
+        events_list = []   
         for p in REPLICATE_PROJECTS:
             data = self.master._getAllOpenedReviews(p)
             for record in data:
+                prj = _get_value(record, 'project')
+                if projects is not None and prj not in projects:
+                    self.log.debug("DBG: pushAllOpenedReviews: %s skipped" % prj)
+                    continue
                 event = self._currentPatchSet2ChangeEvent(record)
                 if self._filterEvent(event):
                     continue
@@ -785,10 +793,13 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
                 else:
                     self.log.debug("DBG: pushAllOpenedReviews: review_id %s , status = %s : already pushed - skipped" % (review_id, status))
 
-    def recloneProjectsWithOpenedReviews(self):
+    def recloneProjectsWithOpenedReviews(self, projects=None):
         self.log.debug("DBG: recloneProjectsWithOpenedReviews")
         events_list = []
         for p in REPLICATE_PROJECTS:
+            if projects is not None and p not in projects:
+                self.log.debug("DBG: recloneProjectsWithOpenedReviews: %s skipped" % p)
+                continue
             data = self._getAllOpenedReviews(p)
             if len(data) > 0:
                 # skip if there are opened reviews otherwise replacing git repo
@@ -801,17 +812,20 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
                 if self._filterEvent(event):
                     continue
                 events_list += [event]
-        projects = []
+        cloned_projects = []
         for event in events_list:
             prj = _get_value(event, 'project')
-            if prj not in projects:
-                projects += [prj]
+            if prj not in cloned_projects:
+                cloned_projects += [prj]
                 self._fullCloneFromMaster(event)
 
-    def recheckFailedOpenedReviews(self):
+    def recheckFailedOpenedReviews(self, projects=None):
         self.log.debug("DBG: recheckOpenedReviews")
         events_list = []
         for p in REPLICATE_PROJECTS:
+            if projects is not None and p not in projects:
+                self.log.debug("DBG: recheckFailedOpenedReviews: %s skipped" % p)
+                continue
             data = self._getAllOpenedReviews(p)
             for record in data:
                 event = self._currentPatchSet2ChangeEvent(record)
@@ -935,6 +949,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument('cmd', default='sync')
+    parser.add_argument('--projects', default='')
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.DEBUG)
@@ -1009,13 +1024,17 @@ if __name__ == "__main__":
             print("DBG: KeyboardInterrupt: %s" % e)
 
     elif args.cmd == 'abandon_synced_reviews':
-        connection_slave.abandonAll()
+        projects = args.projects.split(',')
+        connection_slave.abandonAll(projects=projects)
     elif args.cmd == 'push_opened_reviews':
-        connection_slave.pushAllOpenedReviews()
+        projects = args.projects.split(',')
+        connection_slave.pushAllOpenedReviews(projects=projects)
     elif args.cmd == 'reclone_for_opened_reviews':
-        connection_slave.recloneProjectsWithOpenedReviews()
+        projects = args.projects.split(',')
+        connection_slave.recloneProjectsWithOpenedReviews(projects=projects)
     elif args.cmd == 'recheck_failed_opened_reviews':
-        connection_slave.recheckFailedOpenedReviews()
+        projects = args.projects.split(',')
+        connection_slave.recheckFailedOpenedReviews(projects=projects)
 
     connection_slave.onStop()
     connection_master.onStop()
