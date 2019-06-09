@@ -767,12 +767,11 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
         self.log.debug("DBG: pushAllOpenedReviews")
         events_list = []   
         for p in REPLICATE_PROJECTS:
+            if projects is not None and p not in projects:
+                self.log.debug("DBG: pushAllOpenedReviews: %s skipped" % p)
+                continue
             data = self.master._getAllOpenedReviews(p)
             for record in data:
-                prj = _get_value(record, 'project')
-                if projects is not None and prj not in projects:
-                    self.log.debug("DBG: pushAllOpenedReviews: %s skipped" % prj)
-                    continue
                 event = self._currentPatchSet2ChangeEvent(record)
                 if self._filterEvent(event):
                     continue
