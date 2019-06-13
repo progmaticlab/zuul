@@ -793,7 +793,7 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
                 else:
                     self.log.debug(
                         "DBG: pushAllOpenedReviews: review_id %s , status = %s : already pushed - skipped" % (
-                        review_id, status))
+                            review_id, status))
 
     def recloneProjectsWithOpenedReviews(self, projects=None):
         self.log.debug("DBG: recloneProjectsWithOpenedReviews")
@@ -867,29 +867,58 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
 
     def compareReviewStates(self):
         self.log.debug("DBG: compareReviewStates")
-        diverged_reviews = []
+        diverged_reviews = [str]
+        ok_reviews = [str]
         for p in REPLICATE_PROJECTS:
             data = self.master._getAllOpenedReviews(p)
             for slave_review in data:
                 slave_review_id = _get_value(slave_review, 'id')
                 master_review = self._findReviewInGerrit(p, slave_review_id)
-                master_approvals_value = _get_value(master_review, ['approvals', 'value'])
-                slave_approvals_value = _get_value(slave_review, ['approvals', 'value'])
-                if master_approvals_value == slave_approvals_value or (
-                        master_approvals_value is None and slave_approvals_value is None):
+                if master_review is None:
                     continue
+                master_approval = _get_value(master_review, ['currentPatchSet', 'approvals'])
+                master_approval_value = "n/a"
+                if master_approval is None:
+                    continue
+                for i in master_approval:
+                    if "value" in i.keys():
+                        master_approval_value =  i.get('value')
+                slave_approval = _get_value(slave_review, ['currentPatchSet' , 'approvals'])
+                slave_approval_value = "n/a"
+                if slave_approval is None:
+                    continue
+                for i in slave_approval:
+                    if "value" in i.keys():
+                        slave_approval_value = i.get('value')
+                if slave_approval_value == slave_approval_value or (
+                        slave_approval_value is None and slave_approval_value is None):
+                    master_subject = _get_value(master_review, ['subject'])
+                    master_url = _get_value(master_review, ['url'])
+                    slave_subject = _get_value(slave_review, ['subject'])
+                    slave_url = _get_value(slave_review, ['url'])
+                    res = "%s\t%s\t%s\t%s\t%s\t%s\t" % (
+                    master_subject, master_url, master_approval_value, slave_subject, slave_url, slave_approval_value)
+                    ok_reviews.append(res)
+                    print("++++" + res)
                 else:
-                    grd = GerritReviewDiverged(
-                        GerritReview(_get_value(master_review, ['currentPatchSet', 'subject']),
-                                     _get_value(master_review, ['currentPatchSet', 'url']),
-                                     master_approvals_value),
-                        GerritReview(_get_value(slave_review, ['currentPatchSet', 'subject']),
-                                     _get_value(slave_review, ['currentPatchSet', 'url']),
-                                     slave_approvals_value))
-                    diverged_reviews.append(grd)
-        print("Diverged length :" + str(diverged_reviews.__len__()))
+                    master_subject = _get_value(master_review, ['subject'])
+                    master_url = _get_value(master_review, ['url'])
+                    slave_subject = _get_value(slave_review, ['subject'])
+                    slave_url = _get_value(slave_review, ['url'])
+                    res = "%s\t%s\t%s\t%s\t%s\t%s\t" % (
+                        master_subject, master_url, master_approval_value, slave_subject, slave_url, slave_approval_value)
+                    diverged_reviews.append(res)
+                    print("++++" + res)
+
+        print("Diverged  review quantity:" + str(diverged_reviews.__len__()))
+        print("Identical review quantity:" + str(ok_reviews.__len__()))
+        print ("MASTER_SUBJECT\t|MASTER_URL\t|MASTER_APPROVAL\t|SLAVE_SUBJECT\t|SLAVE_URL\t|SLAVE_APPROVAL\t")
         for diverged_review in diverged_reviews:
-            print(str(diverged_review))
+            print(diverged_review)
+        print("_______________________________________")
+        print ("MASTER_SUBJECT\t|MASTER_URL\t|MASTER_APPROVAL\t|SLAVE_SUBJECT\t|SLAVE_URL\t|SLAVE_APPROVAL\t")
+        for ok_review in ok_reviews:
+            print(ok_review)
 
 
 class GerritWatcherMaster(GerritWatcher):
@@ -930,7 +959,7 @@ class GerritConnectionMaster(GerritConnectionReplicationBase):
             git_repo.git.checkout(commit_id)
             res = REVIEW_ID_RE.search(git_repo.head.commit.message)
             self.log.debug("DBG: _getReviewIdByCommit: project: %s, commit: %s, message: %s" % (
-            project, commit_id, git_repo.head.commit.message))
+                project, commit_id, git_repo.head.commit.message))
             if res is None:
                 return None
             return res.group(0).split()[1]
@@ -1072,32 +1101,3 @@ if __name__ == "__main__":
     connection_slave.setMaster(None)
     print("DBG: exit")
     sys.exit(0)
-
-
-class GerritReview():
-    name = str
-    url = str
-    approvals = str
-
-    def __init__(self, aprrovals, name, url) -> None:
-        self.name = name
-        self.url = url
-        self.approvals = aprrovals
-
-    def __str__(self) -> str:
-        return str(self.name + "\t" + self.url + "\t" + self.approvals)
-
-
-class GerritReviewDiverged():
-    master = GerritReview
-    slave = GerritReview
-
-    def __init__(self, master, slave) -> None:
-        self.master = master
-        self.slave = slave
-
-    # def __str__(self) -> str:
-    #     return str(self.master)+"\t"+str(self.slave)+"\n"
-
-    def __str__(self) -> str:
-        return super().__str__(self.master + "\t" + self.slave + "\n")
