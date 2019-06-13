@@ -15,76 +15,75 @@ import paramiko
 
 import argparse
 
-
 REPLICATE_PROJECTS = [
-      "Juniper/contrail-analytics",
-      "Juniper/contrail-ansible",
-      "Juniper/contrail-ansible-deployer",
-      "Juniper/contrail-ansible-internal",
-      "Juniper/contrail-api-client",
-      "Juniper/contrail-build",
-      "Juniper/contrail-common",
-      "Juniper/contrail-community-docs",
-      "Juniper/contrail-container-builder",
-      "Juniper/contrail-controller",
-      "Juniper/contrail-deployers-containers",
-      "Juniper/contrail-dev-env",
-      "Juniper/contrail-docker",
-      "Juniper/contrail-docs",
-      "Juniper/contrail-dpdk",
-      "Juniper/contrail-fabric-utils",
-      "Juniper/contrail-generateDS",
-      "Juniper/contrail-go-api",
-      "Juniper/contrail-heat",
-      "Juniper/contrail-helm-deployer",
-      "Juniper/contrail-horizon",
-      "Juniper/contrail-infra",
-      "Juniper/contrail-infra-doc",
-      "Juniper/contrail-java-api",
-      "Juniper/contrail-kolla-ansible",
-      "Juniper/contrail-neutron-plugin",
-      "Juniper/contrail-nova-vif-driver",
-      "Juniper/contrail-packages",
-      "Juniper/contrail-packaging",
-      "Juniper/contrail-provisioning",
-      "Juniper/contrail-publisher",
-      "Juniper/contrail-puppet",
-      "Juniper/contrail-sandesh",
-      "Juniper/contrail-server-manager",
-      "Juniper/contrail-specs",
-      "Juniper/contrail-test",
-      "Juniper/contrail-test-ci",
-      "Juniper/contrail-third-party",
-      "Juniper/contrail-third-party-cache",
-      "Juniper/contrail-third-party-packages",
-      "Juniper/contrail-tripleo-heat-templates",
-      "Juniper/contrail-tripleo-puppet",
-      "Juniper/contrail-vcenter-fabric-manager",
-      "Juniper/contrail-vcenter-manager",
-      "Juniper/contrail-vcenter-plugin",
-      "Juniper/contrail-vnc",
-      "Juniper/contrail-vro-plugin",
-      "Juniper/contrail-vrouter",
-      "Juniper/contrail-vrouter-java-api",
-      "Juniper/contrail-web-controller",
-      "Juniper/contrail-web-core",
-      "Juniper/contrail-web-server-manager",
-      "Juniper/contrail-web-storage",
-      "Juniper/contrail-webui-third-party",
-      "Juniper/contrail-windows",
-      "Juniper/contrail-windows-docker-driver",
-      "Juniper/contrail-windows-test",
-      "Juniper/horizon",
-      "Juniper/nova",
-      "Juniper/openshift-ansible",
-      "Juniper/openstack-helm",
-      "Juniper/openstack-helm-infra",
-      "Juniper/puppet-contrail",
-      "Juniper/vijava",
+    "Juniper/contrail-analytics",
+    "Juniper/contrail-ansible",
+    "Juniper/contrail-ansible-deployer",
+    "Juniper/contrail-ansible-internal",
+    "Juniper/contrail-api-client",
+    "Juniper/contrail-build",
+    "Juniper/contrail-common",
+    "Juniper/contrail-community-docs",
+    "Juniper/contrail-container-builder",
+    "Juniper/contrail-controller",
+    "Juniper/contrail-deployers-containers",
+    "Juniper/contrail-dev-env",
+    "Juniper/contrail-docker",
+    "Juniper/contrail-docs",
+    "Juniper/contrail-dpdk",
+    "Juniper/contrail-fabric-utils",
+    "Juniper/contrail-generateDS",
+    "Juniper/contrail-go-api",
+    "Juniper/contrail-heat",
+    "Juniper/contrail-helm-deployer",
+    "Juniper/contrail-horizon",
+    "Juniper/contrail-infra",
+    "Juniper/contrail-infra-doc",
+    "Juniper/contrail-java-api",
+    "Juniper/contrail-kolla-ansible",
+    "Juniper/contrail-neutron-plugin",
+    "Juniper/contrail-nova-vif-driver",
+    "Juniper/contrail-packages",
+    "Juniper/contrail-packaging",
+    "Juniper/contrail-provisioning",
+    "Juniper/contrail-publisher",
+    "Juniper/contrail-puppet",
+    "Juniper/contrail-sandesh",
+    "Juniper/contrail-server-manager",
+    "Juniper/contrail-specs",
+    "Juniper/contrail-test",
+    "Juniper/contrail-test-ci",
+    "Juniper/contrail-third-party",
+    "Juniper/contrail-third-party-cache",
+    "Juniper/contrail-third-party-packages",
+    "Juniper/contrail-tripleo-heat-templates",
+    "Juniper/contrail-tripleo-puppet",
+    "Juniper/contrail-vcenter-fabric-manager",
+    "Juniper/contrail-vcenter-manager",
+    "Juniper/contrail-vcenter-plugin",
+    "Juniper/contrail-vnc",
+    "Juniper/contrail-vro-plugin",
+    "Juniper/contrail-vrouter",
+    "Juniper/contrail-vrouter-java-api",
+    "Juniper/contrail-web-controller",
+    "Juniper/contrail-web-core",
+    "Juniper/contrail-web-server-manager",
+    "Juniper/contrail-web-storage",
+    "Juniper/contrail-webui-third-party",
+    "Juniper/contrail-windows",
+    "Juniper/contrail-windows-docker-driver",
+    "Juniper/contrail-windows-test",
+    "Juniper/horizon",
+    "Juniper/nova",
+    "Juniper/openshift-ansible",
+    "Juniper/openstack-helm",
+    "Juniper/openstack-helm-infra",
+    "Juniper/puppet-contrail",
+    "Juniper/vijava",
 ]
-    # Dont track
-    #   "Juniper/contrail-project-config",
-    #   "Juniper/contrail-zuul-jobs",
+# Dont track
+#   "Juniper/contrail-project-config",
+#   "Juniper/contrail-zuul-jobs",
 
 
 REPLICATE_BRANCHES = [
@@ -368,7 +367,7 @@ def _get_value(data, field):
 
 
 class GerritConnectionReplicationBase(GerritConnection):
-    def _findReviewInGerrit(self, project, review_id): 
+    def _findReviewInGerrit(self, project, review_id):
         self.log.debug("DBG: _findReviewInGerrit: project: %s, %s" % (project, review_id))
         query = "change:%s" % review_id
         data = self.simpleQuery(query)
@@ -389,7 +388,8 @@ class GerritConnectionReplicationBase(GerritConnection):
             except Exception as e:
                 if i == 3:
                     self.log.debug("DBG: _getAllOpenedReviews: Exception: %s" % e)
-        return []                
+        return []
+
 
 class GerritEventConnectorSlave(GerritEventConnector):
     log = logging.getLogger("zuul.GerritEventConnectorSlave")
@@ -400,7 +400,7 @@ class GerritEventConnectorSlave(GerritEventConnector):
     def _handleEvent(self):
         ts, event = self.connection.getEvent()
         # pause see details in base class
-        self._pauseForGerrit(ts = ts)
+        self._pauseForGerrit(ts=ts)
         if self._stopped:
             return
         self.connection.doReplicateEvent(event)
@@ -411,12 +411,13 @@ class GerritEventConnectorSlave(GerritEventConnector):
     def _getChange(self, event):
         pass
 
-    def _pauseForGerrit(self, ts = None):
+    def _pauseForGerrit(self, ts=None):
         if ts is not None:
             now = time.time()
             time.sleep(max((ts + self.delay) - now, 0.0))
         else:
             time.sleep(self.delay)
+
 
 class GerritConnectionSlave(GerritConnectionReplicationBase):
     log = logging.getLogger("zuul.GerritConnectionSlave")
@@ -443,19 +444,19 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
         if change_type is None:
             change_type = _get_value(event, ['change', 'type'])
 
-        if change_type  in ['change-created', 'patchset-created']:
+        if change_type in ['change-created', 'patchset-created']:
             return self._processPatchSetEvent(event)
 
-        if change_type  == 'change-restored':
+        if change_type == 'change-restored':
             return self._processChangeRestoredEvent(event)
 
-        if change_type  == 'change-abandoned':
+        if change_type == 'change-abandoned':
             return self._processChangeAbandonedEvent(event)
 
-        if change_type  == 'change-merged':
+        if change_type == 'change-merged':
             return self._processChangeMergedEvent(event)
 
-        if change_type  == 'comment-added':
+        if change_type == 'comment-added':
             return self._processCommentAddedEvent(event)
 
         self.log.debug("DBG: skip change type: %s" % change_type)
@@ -507,7 +508,7 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
         commit = self._checkoutFromRemote(repo, remote, project, ref)
         self.log.debug("DBG: _processPatchSetEvent: commit=%s" % commit)
         # reset author to default (zuul)
-        new_message =  'Initial Review: %s\n\n%s' % (url, _get_value(event, ['change', 'commitMessage']))
+        new_message = 'Initial Review: %s\n\n%s' % (url, _get_value(event, ['change', 'commitMessage']))
         commit = self._amendCommitMessage(repo, message=new_message)
         self.log.debug("DBG: _processPatchSetEvent: amended commit=%s" % commit)
         # public changes to gerrit
@@ -524,7 +525,7 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
         for p in _get_value(event, ['patchSet', 'parents']):
             parent_review_id, parent_event = self._findCommitInGerritMaster(project, p)
             if parent_event is not None:
-                #patch parent event if it has no change inside )it is for merged changes)
+                # patch parent event if it has no change inside )it is for merged changes)
                 parent_event = self._currentPatchSet2ChangeEvent(parent_event)
                 # pranet found on master
                 parent_changeid = self._getCurrentChangeId(parent_event)
@@ -765,7 +766,7 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
 
     def pushAllOpenedReviews(self, projects=None):
         self.log.debug("DBG: pushAllOpenedReviews")
-        events_list = []   
+        events_list = []
         for p in REPLICATE_PROJECTS:
             if projects is not None and p not in projects:
                 self.log.debug("DBG: pushAllOpenedReviews: %s skipped" % p)
@@ -790,7 +791,9 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
                     # restore event
                     self._processChangeRestoredEvent(event)
                 else:
-                    self.log.debug("DBG: pushAllOpenedReviews: review_id %s , status = %s : already pushed - skipped" % (review_id, status))
+                    self.log.debug(
+                        "DBG: pushAllOpenedReviews: review_id %s , status = %s : already pushed - skipped" % (
+                        review_id, status))
 
     def recloneProjectsWithOpenedReviews(self, projects=None):
         self.log.debug("DBG: recloneProjectsWithOpenedReviews")
@@ -834,7 +837,7 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
                 if approvals is None:
                     self.log.debug("DBG: recheckOpenedReviews: no approvals yet: skipped")
                     continue
-                verified=''
+                verified = ''
                 for a in approvals:
                     if _get_value(a, 'type') != 'Verified':
                         continue
@@ -851,7 +854,6 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
             err = self.review(project, changeid, 'recheck')
             self.log.debug("DBG: recheckFailedOpenedReviews: gerrit review recheck: %s" % err)
 
-
     def _pauseForGerrit(self):
         if self.gerrit_event_connector:
             self.gerrit_event_connector._pauseForGerrit()
@@ -862,6 +864,32 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
     def _start_event_connector(self):
         self.gerrit_event_connector = GerritEventConnectorSlave(self)
         self.gerrit_event_connector.start()
+
+    def compareReviewStates(self):
+        self.log.debug("DBG: compareReviewStates")
+        diverged_reviews = []
+        for p in REPLICATE_PROJECTS:
+            data = self.master._getAllOpenedReviews(p)
+            for slave_review in data:
+                slave_review_id = _get_value(slave_review, 'id')
+                master_review = self._findReviewInGerrit(p, slave_review_id)
+                master_approvals_value = _get_value(master_review, ['approvals', 'value'])
+                slave_approvals_value = _get_value(slave_review, ['approvals', 'value'])
+                if master_approvals_value == slave_approvals_value or (
+                        master_approvals_value is None and slave_approvals_value is None):
+                    continue
+                else:
+                    grd = GerritReviewDiverged(
+                        GerritReview(_get_value(master_review, ['currentPatchSet', 'subject']),
+                                     _get_value(master_review, ['currentPatchSet', 'url']),
+                                     master_approvals_value),
+                        GerritReview(_get_value(slave_review, ['currentPatchSet', 'subject']),
+                                     _get_value(slave_review, ['currentPatchSet', 'url']),
+                                     slave_approvals_value))
+                    diverged_reviews.append(grd)
+        print("Diverged length :" + str(diverged_reviews.__len__()))
+        for diverged_review in diverged_reviews:
+            print(str(diverged_review))
 
 
 class GerritWatcherMaster(GerritWatcher):
@@ -901,7 +929,8 @@ class GerritConnectionMaster(GerritConnectionReplicationBase):
         try:
             git_repo.git.checkout(commit_id)
             res = REVIEW_ID_RE.search(git_repo.head.commit.message)
-            self.log.debug("DBG: _getReviewIdByCommit: project: %s, commit: %s, message: %s" % (project, commit_id, git_repo.head.commit.message))
+            self.log.debug("DBG: _getReviewIdByCommit: project: %s, commit: %s, message: %s" % (
+            project, commit_id, git_repo.head.commit.message))
             if res is None:
                 return None
             return res.group(0).split()[1]
@@ -909,7 +938,7 @@ class GerritConnectionMaster(GerritConnectionReplicationBase):
             self.log.debug("DBG: _getReviewIdByCommit: Project: %s, Commit: %s Exception: %s" % (project, commit_id, e))
             return None
 
-    def _findCommitInGerrit(self, project, commit_id): 
+    def _findCommitInGerrit(self, project, commit_id):
         review_id = self._getReviewIdByCommit(project, commit_id)
         if review_id is None:
             self.log.debug("DBG: _findCommitInGerrit: review not found")
@@ -954,26 +983,26 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
 
     config_master = {
-        "name":             "gerrit_master",
-        "driver":           "gerrit",
-        "sshkey":           "/var/ssh/zuul_rsa",
-        "server":           "review.opencontrail.org",
-        "user":             "alexey-mr",
-        "baseurl":          "https://review.opencontrail.org"
+        "name": "gerrit_master",
+        "driver": "gerrit",
+        "sshkey": "/var/ssh/zuul_rsa",
+        "server": "review.opencontrail.org",
+        "user": "alexey-mr",
+        "baseurl": "https://review.opencontrail.org"
     }
 
     config_slave = {
-        "name":             "gerrit_slave",
-        "driver":           "gerrit",
-        "sshkey":           "/var/ssh/zuul_rsa",
-        "server":           "gerrit",
-        "user":             "zuul",
-        "baseurl":          "http://gerrit",
+        "name": "gerrit_slave",
+        "driver": "gerrit",
+        "sshkey": "/var/ssh/zuul_rsa",
+        "server": "gerrit",
+        "user": "zuul",
+        "baseurl": "http://gerrit",
     }
 
     print(os.environ)
-    home=os.environ['HOME']
-    path=os.environ['PATH']
+    home = os.environ['HOME']
+    path = os.environ['PATH']
     os.environ.clear()
     os.environ.update(
         {
@@ -997,7 +1026,7 @@ if __name__ == "__main__":
     merge_name = 'zuul'
     speed_limit = '1000'
     speed_time = '30'
-    
+
     merger_slave = merger.Merger(
         '/home/zuul/replica/slave/merger-git',
         registry, merge_email, merge_name,
@@ -1017,7 +1046,7 @@ if __name__ == "__main__":
         connection_master.onLoad()
 
         try:
-            while(True):
+            while (True):
                 time.sleep(1)
         except KeyboardInterrupt as e:
             print("DBG: KeyboardInterrupt: %s" % e)
@@ -1034,10 +1063,41 @@ if __name__ == "__main__":
     elif args.cmd == 'recheck_failed_opened_reviews':
         projects = args.projects.split(',')
         connection_slave.recheckFailedOpenedReviews(projects=projects)
-
+    elif args.cmd == 'compare_review_states':
+        projects = args.projects.split(',')
+        connection_slave.compareReviewStates()
     connection_slave.onStop()
     connection_master.onStop()
     connection_master.setSlave(None)
     connection_slave.setMaster(None)
     print("DBG: exit")
     sys.exit(0)
+
+
+class GerritReview():
+    name = str
+    url = str
+    approvals = str
+
+    def __init__(self, aprrovals, name, url) -> None:
+        self.name = name
+        self.url = url
+        self.approvals = aprrovals
+
+    def __str__(self) -> str:
+        return str(self.name + "\t" + self.url + "\t" + self.approvals)
+
+
+class GerritReviewDiverged():
+    master = GerritReview
+    slave = GerritReview
+
+    def __init__(self, master, slave) -> None:
+        self.master = master
+        self.slave = slave
+
+    # def __str__(self) -> str:
+    #     return str(self.master)+"\t"+str(self.slave)+"\n"
+
+    def __str__(self) -> str:
+        return super().__str__(self.master + "\t" + self.slave + "\n")
