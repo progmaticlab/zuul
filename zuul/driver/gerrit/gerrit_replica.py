@@ -865,61 +865,127 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
         self.gerrit_event_connector = GerritEventConnectorSlave(self)
         self.gerrit_event_connector.start()
 
+    #  TODO remove identical_reviews collecting after tests
+    # def compareReviewStates(self):
+    #     self.log.debug("DBG: compareReviewStates")
+    #     diverged_reviews = []
+    #     identical_reviews = []
+    #     total_length = 0
+    #     for p in REPLICATE_PROJECTS:
+    #         data = self.master._getAllOpenedReviews(p)
+    #         total_length += len(data)
+    #         for master_review in data:
+    #             res = ""
+    #             master_approval_value = "n/a"
+    #             slave_approval_value = "n/a"
+    #             master_approval = _get_value(master_review, ['currentPatchSet', 'approvals'])
+    #             if master_approval is not None:
+    #                 for i in master_approval:
+    #                     if "value" in i.keys():
+    #                         master_approval_value = i.get('value')
+    #             master_subject = _get_value(master_review, ['subject'])
+    #             master_url = _get_value(master_review, ['url'])
+    #             master_review_id = _get_value(master_review, 'id')
+    #             slave_review = self._findReviewInGerrit(p, master_review_id)
+    #             if slave_review is None:
+    #                 res = "n/a\tn/a\tn/a\t%s\t%s\t%s\t" % (
+    #                     master_subject, master_url,
+    #                     master_approval_value)
+    #                 diverged_reviews.append(res)
+    #                 continue
+    #             slave_approval = _get_value(slave_review, ['currentPatchSet', 'approvals'])
+    #             if slave_approval is not None:
+    #                 for i in slave_approval:
+    #                     if "value" in i.keys():
+    #                         slave_approval_value = i.get('value')
+    #             if master_approval_value == slave_approval_value or (
+    #                     master_approval_value == "n/a" == slave_approval_value ):
+    #                 slave_subject = _get_value(slave_review, ['subject'])
+    #                 slave_url = _get_value(slave_review, ['url'])
+    #                 master_subject = _get_value(master_review, ['subject'])
+    #                 master_url = _get_value(master_review, ['url'])
+    #                 res = ("%s=%s " %(master_approval_value , slave_approval_value) + "%s\t%s\t%s\t%s\t%s\t%s\t" % (
+    #                     slave_subject, slave_url, slave_approval_value, master_subject, master_url,
+    #                     master_approval_value))
+    #                 identical_reviews.append(res)
+    #             else:
+    #                 slave_subject = _get_value(slave_review, ['subject'])
+    #                 slave_url = _get_value(slave_review, ['url'])
+    #                 master_subject = _get_value(master_review, ['subject'])
+    #                 master_url = _get_value(master_review, ['url'])
+    #                 res = "%s\t%s\t%s\t%s\t%s\t%s\t" % (
+    #                     slave_subject, slave_url, slave_approval_value, master_subject, master_url,
+    #                     master_approval_value)
+    #                 diverged_reviews.append(res)
+    #     print("Total lenth :" + str(total_length))
+    #     print("Diverged  review quantity:" + str(diverged_reviews.__len__()))
+    #     print("Identical review quantity:" + str(identical_reviews.__len__()))
+    #     print("|SLAVE_SUBJECT|\t|SLAVE_URL|\t|SLAVE_APPROVAL|\t|MASTER_SUBJECT|\t|MASTER_URL|\t|MASTER_APPROVAL|\t")
+    #     for diverged_review in diverged_reviews:
+    #         print(diverged_review)
+    #     print("|SLAVE_SUBJECT|\t|SLAVE_URL|\t|SLAVE_APPROVAL|\t|MASTER_SUBJECT|\t|MASTER_URL|\t|MASTER_APPROVAL|\t")
+    #     for ok_review in identical_reviews:
+    #         print(ok_review)
+
     def compareReviewStates(self):
         self.log.debug("DBG: compareReviewStates")
-        diverged_reviews = [str]
-        ok_reviews = [str]
+        diverged_reviews = []
+        identical_reviews = []
+        total_length = 0
         for p in REPLICATE_PROJECTS:
-            data = self.master._getAllOpenedReviews(p)
+            data = self._getAllOpenedReviews(p)
+            total_length += len(data)
             for slave_review in data:
+                slave_approval_value = "n/a"
+                master_approval_value = "n/a"
+                slave_approval = _get_value(slave_review, ['currentPatchSet', 'approvals'])
+                if slave_approval is not None:
+                    for i in slave_approval:
+                        if "value" in i.keys():
+                            slave_approval_value = i.get('value')
+                slave_subject = _get_value(slave_review, ['subject'])
+                slave_url = _get_value(slave_review, ['url'])
                 slave_review_id = _get_value(slave_review, 'id')
-                master_review = self._findReviewInGerrit(p, slave_review_id)
+                master_review = self.master._findReviewInGerrit(p, slave_review_id)
                 if master_review is None:
+                    res = "n/a\tn/a\tn/a\t%s\t%s\t%s\t" % (
+                        slave_subject, slave_url,
+                        slave_approval_value)
+                    diverged_reviews.append(res)
                     continue
                 master_approval = _get_value(master_review, ['currentPatchSet', 'approvals'])
-                master_approval_value = "n/a"
-                if master_approval is None:
-                    continue
-                for i in master_approval:
-                    if "value" in i.keys():
-                        master_approval_value =  i.get('value')
-                slave_approval = _get_value(slave_review, ['currentPatchSet' , 'approvals'])
-                slave_approval_value = "n/a"
-                if slave_approval is None:
-                    continue
-                for i in slave_approval:
-                    if "value" in i.keys():
-                        slave_approval_value = i.get('value')
-                if slave_approval_value == slave_approval_value or (
-                        slave_approval_value is None and slave_approval_value is None):
+                if master_approval is not None:
+                    for i in master_approval:
+                        if "value" in i.keys():
+                            master_approval_value = i.get('value')
+                if slave_approval_value == master_approval_value or (
+                        slave_approval_value == "n/a" == master_approval_value ):
                     master_subject = _get_value(master_review, ['subject'])
                     master_url = _get_value(master_review, ['url'])
                     slave_subject = _get_value(slave_review, ['subject'])
                     slave_url = _get_value(slave_review, ['url'])
                     res = "%s\t%s\t%s\t%s\t%s\t%s\t" % (
-                    master_subject, master_url, master_approval_value, slave_subject, slave_url, slave_approval_value)
-                    ok_reviews.append(res)
-                    print("++++" + res)
+                        master_subject, master_url, master_approval_value, slave_subject, slave_url,
+                        slave_approval_value)
+                    identical_reviews.append(res)
                 else:
                     master_subject = _get_value(master_review, ['subject'])
                     master_url = _get_value(master_review, ['url'])
                     slave_subject = _get_value(slave_review, ['subject'])
                     slave_url = _get_value(slave_review, ['url'])
                     res = "%s\t%s\t%s\t%s\t%s\t%s\t" % (
-                        master_subject, master_url, master_approval_value, slave_subject, slave_url, slave_approval_value)
+                        master_subject, master_url, master_approval_value, slave_subject, slave_url,
+                        slave_approval_value)
                     diverged_reviews.append(res)
-                    print("++++" + res)
-
+        print("Total lenth :" + str(total_length))
         print("Diverged  review quantity:" + str(diverged_reviews.__len__()))
-        print("Identical review quantity:" + str(ok_reviews.__len__()))
-        print ("MASTER_SUBJECT\t|MASTER_URL\t|MASTER_APPROVAL\t|SLAVE_SUBJECT\t|SLAVE_URL\t|SLAVE_APPROVAL\t")
+        print("Identical review quantity:" + str(identical_reviews.__len__()))
+        print("|MASTER_SUBJECT|\t|MASTER_URL|\t|MASTER_APPROVAL|\t|SLAVE_SUBJECT|\t|SLAVE_URL|\t|SLAVE_APPROVAL|\t")
         for diverged_review in diverged_reviews:
             print(diverged_review)
-        print("_______________________________________")
-        print ("MASTER_SUBJECT\t|MASTER_URL\t|MASTER_APPROVAL\t|SLAVE_SUBJECT\t|SLAVE_URL\t|SLAVE_APPROVAL\t")
-        for ok_review in ok_reviews:
+        print("|MASTER_SUBJECT|\t|MASTER_URL|\t|MASTER_APPROVAL|\t|SLAVE_SUBJECT|\t|SLAVE_URL|\t|SLAVE_APPROVAL|\t")
+        for ok_review in identical_reviews:
             print(ok_review)
-
 
 class GerritWatcherMaster(GerritWatcher):
     log = logging.getLogger("gerrit.GerritWatcherMaster")
