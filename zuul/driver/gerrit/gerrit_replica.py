@@ -375,17 +375,20 @@ class GerritConnectionReplicationBase(GerritConnection):
     def setMerger(self, merger):
         self.merger = merger
 
-    def _findReviewInGerrit(self, review_id): 
-        self.log.debug("DBG: _findReviewInGerrit: %s" % review_id)
+    def _findReviewInGerrit(self, review_id, branch = None, status = None): 
+        self.log.debug("DBG: _findReviewInGerrit: review_id=%s branch=%s status=%s" % (review_id, branch, status))
         query = "change:%s" % review_id
         data = self.simpleQuery(query)
         self.log.debug("DBG: _findReviewInGerrit: data: %s" % data)
+        res = None
         for record in data:
-            rid = _get_value(record, 'id')
-            if rid == review_id:
-                self.log.debug("DBG: _findReviewInGerrit: found: %s" % record)
-                return record
-        return None
+            if branch is not None and branch != _get_value(record, 'branch'):
+                continue
+            if status is not None and status != _get_value(record, 'status'):
+                continue
+            res = record
+            break
+        return res
 
     def _getReviewIdByCommit(self, project, commit_id):
         repo = self.merger.getRepo(self.connection_name, project)
@@ -402,12 +405,12 @@ class GerritConnectionReplicationBase(GerritConnection):
             # commit not found
             return None
 
-    def _findCommitInGerrit(self, project, commit_id): 
+    def _findCommitInGerrit(self, project, branch, commit_id): 
         review_id = self._getReviewIdByCommit(project, commit_id)
         if review_id is None:
             self.log.debug("DBG: _findCommitInGerrit: review not found")
             return (None, None)
-        return (review_id, self._findReviewInGerrit(review_id))
+        return (review_id, self._findReviewInGerrit(review_id, branch=branch))
 
     def _getAllOpenedReviews(self, project):
         query = "project:%s status:open" % project
@@ -632,9 +635,10 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
 
     def _processChangeMergedEvent(self, event):
         project = _get_value(event, ['change', 'project'])
+        branch = _get_value(event, ['change', 'branch'])
         review_id = _get_value(event, ['change', 'id'])
         self.log.debug("DBG: _processChangeMergedEvent: project %s: review_id: %s" % (project, review_id))
-        data = self._findReviewInGerrit(review_id)
+        data = self._findReviewInGerrit(review_id, branch=branch)
         if data is None:
             self.log.debug("DBG: _processChangeMergedEvent: cannot find review: nothing todo")
             return
@@ -813,7 +817,8 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
         for event in events_list:
             project = _get_value(event, ['change', 'project'])
             review_id = _get_value(event, ['change', 'id'])
-            data = self._findReviewInGerrit(review_id)
+            branch = _get_value(event, ['change', 'branch'])
+            data = self._findReviewInGerrit(review_id, branch=branch)
             if data is None:
                 self._processPatchSetEvent(event)
             else:
@@ -828,11 +833,11 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
                         "DBG: pushAllOpenedReviews: review_id %s , status = %s : already pushed - skipped" % (
                             review_id, status))
 
-    def pushReviews(self, reviews=None):
+    def pushReviews(self, reviews=None, branch='master'):
         self.log.debug("DBG: pushReviews")
         events_list = []
         for review in reviews:
-            data = self.master._findReviewInGerrit(review)
+            data = self.master._findReviewInGerrit(review, branch=branch)
             if data is None:
                 self.log.debug("DBG: pushReviews: cannot find review %s on master" % review)
                 continue
@@ -842,7 +847,7 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
             events_list += [event]
         for event in events_list:
             review_id = _get_value(event, ['change', 'id'])
-            data = self._findReviewInGerrit(review_id)
+            data = self._findReviewInGerrit(review_id, branch=branch)
             status = 'NEW' if data is None else _get_value(data, ['change', 'status'])
             if status == 'ABANDONED':
                 # restore event
@@ -955,7 +960,8 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
                 # slave_subject = _get_value(slave_review, ['subject'])
                 slave_url = _get_value(slave_review, ['url'])
                 slave_review_id = _get_value(slave_review, 'id')
-                master_review = self.master._findReviewInGerrit(slave_review_id)
+                branch = _get_value(slave_review, 'branch')
+                master_review = self.master._findReviewInGerrit(slave_review_id, branch=branch)
                 if master_review is None:
                     # res = "n/a\tn/a\tn/a\t%s\t%s\t%s\t" % (
                     #     slave_subject, slave_url,
