@@ -923,8 +923,7 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
                     #     master_subject, master_url, master_approval_value, slave_subject, slave_url,
                     #     slave_approval_value)
                     res = "%s\t%s\t%s\t%s\t" % (
-                             master_url, master_approval_value, slave_url,
-                            slave_approval_value)
+                             slave_approval_value , master_approval_value, slave_url, master_url)
                     identical_reviews.append(res)
                 else:
                     # master_subject = _get_value(master_review, ['subject'])
@@ -935,14 +934,13 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
                     #     master_subject, master_url, master_approval_value, slave_subject, slave_url,
                     #     slave_approval_value)
                     res = "%s\t%s\t%s\t%s\t" % (
-                             master_url, master_approval_value, slave_url,
-                            slave_approval_value)
+                             slave_approval_value , master_approval_value, slave_url, master_url)
                     diverged_reviews.append(res)
         self.log.debug(("DBG: _compareReviewStates: total length = " + str(total_length)))
         self.log.debug(("DBG: _compareReviewStates: diverged  review quantity = " + str(diverged_reviews.__len__())))
         self.log.debug(("DBG: _compareReviewStates: identical review quantity = " + str(identical_reviews.__len__())))
         # print("|MASTER_SUBJECT|\t|MASTER_URL|\t|MASTER_APPROVAL|\t|SLAVE_SUBJECT|\t|SLAVE_URL|\t|SLAVE_APPROVAL|\t")
-        print("|MASTER_URL|\t|MASTER_APPROVAL|\t|SLAVE_URL|\t|SLAVE_APPROVAL|\t" , file=output_file)
+        print("|SLAVE_APPROVAL|\t|MASTER_APPROVAL|\t|SLAVE_URL|\t|MASTER_URL|\t" , file=output_file)
         for diverged_review in diverged_reviews:
             print(diverged_review , file=output_file)
         # print("|MASTER_URL|\t|MASTER_APPROVAL|\t|SLAVE_URL|\t|SLAVE_APPROVAL|\t" , file=output_file)
