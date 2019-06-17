@@ -866,7 +866,7 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
         self.gerrit_event_connector.start()
 
 
-    def compareReviewStates(self, output = None , projects=''):
+    def compareReviewStates(self, output = None , projects = ''):
         self.log.debug("DBG: compareReviewStates")
         diverged_reviews = []
         identical_reviews = []
@@ -881,8 +881,9 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
                 return
 
         for p in REPLICATE_PROJECTS:
-            if projects is not '' and p not in projects:
+            if len(projects) > 1 and p not in projects:
                 self.log.debug("DBG: compareReviewStates: %s skipped" % p)
+                self.log.debug("++++"+projects[0]+"")
                 continue
             data = self._getAllOpenedReviews(p)
             total_length += len(data)
