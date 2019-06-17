@@ -389,6 +389,7 @@ class GerritConnectionReplicationBase(GerritConnection):
 
     def _getReviewIdByCommit(self, project, commit_id):
         repo = self.merger.getRepo(self.connection_name, project)
+        repo.update()
         git_repo = repo.createRepoObject()
         try:
             git_repo.git.checkout(commit_id)
