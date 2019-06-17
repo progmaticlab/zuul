@@ -390,17 +390,36 @@ class GerritConnectionReplicationBase(GerritConnection):
                     self.log.debug("DBG: _getAllOpenedReviews: Exception: %s" % e)
         return []
 
-    def _getAllReviews(self, project):
-        query = "project:%s" % project
+    def _countAllReviews(self, project):
+        counter = 0
+        query = "project:%s " % project
         for i in range(1, 3):
             try:
                 data = self.simpleQuery(query)
-                return data
+                for i in data :
+                    print("DBG: _countAllReviews: data: %s" % i)
+                    d = _get_value(i , 'status')
+                    counter+= 1
             except Exception as e:
                 if i == 3:
-                    self.log.debug("DBG: _getAllReviews: Exception: %s" % e)
-        return []
+                    self.log.debug("DBG: _countAllReviews: Exception: %s" % e)
+        return counter
 
+    def _countOpenedReviews(self, project):
+        counter = 0
+        query = "project:%s " % project
+        for i in range(1, 3):
+            try:
+                data = self.simpleQuery(query)
+                for i in data :
+                    print("DBG: _countAllReviews: data: %s" % i)
+                    d = _get_value(i , 'status')
+                    if d != "ABANDONED":
+                        counter+= 1
+            except Exception as e:
+                if i == 3:
+                    self.log.debug("DBG: _countAllReviews: Exception: %s" % e)
+        return counter
 
 class GerritEventConnectorSlave(GerritEventConnector):
     log = logging.getLogger("zuul.GerritEventConnectorSlave")
@@ -428,7 +447,6 @@ class GerritEventConnectorSlave(GerritEventConnector):
             time.sleep(max((ts + self.delay) - now, 0.0))
         else:
             time.sleep(self.delay)
-
 
 class GerritConnectionSlave(GerritConnectionReplicationBase):
     log = logging.getLogger("zuul.GerritConnectionSlave")
@@ -876,11 +894,9 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
         self.gerrit_event_connector = GerritEventConnectorSlave(self)
         self.gerrit_event_connector.start()
 
-
     def compareReviewStates(self, output = None , projects = ''):
         self.log.debug("DBG: compareReviewStates")
         diverged_reviews = []
-        identical_reviews = []
         total_length = 0
         project_summary = []
         output_file = None
@@ -892,15 +908,16 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
                 return
 
         for p in REPLICATE_PROJECTS:
+            project_reviews_opened_total = 0
+            project_reviews_failed = 0
             if len(projects) > 1 and p not in projects:
                 self.log.debug("DBG: compareReviewStates: %s skipped" % p)
                 continue
             data = self._getAllOpenedReviews(p)
-            project_reviews_total = len(self._getAllReviews(p))
-            project_reviews_opened_total = len(p)
-            project_reviews_failed = 0
+            project_reviews_total = self._countAllReviews(p)
             total_length += len(data)
             for slave_review in data:
+                project_reviews_opened_total += 1
                 slave_approval_value = "n/a"
                 master_approval_value = "n/a"
                 slave_approval = _get_value(slave_review, ['currentPatchSet', 'approvals'])
@@ -908,14 +925,10 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
                     for i in slave_approval:
                         if "value" in i.keys():
                             slave_approval_value = i.get('value')
-                # slave_subject = _get_value(slave_review, ['subject'])
                 slave_url = _get_value(slave_review, ['url'])
                 slave_review_id = _get_value(slave_review, 'id')
                 master_review = self.master._findReviewInGerrit(p, slave_review_id)
                 if master_review is None:
-                    # res = "n/a\tn/a\tn/a\t%s\t%s\t%s\t" % (
-                    #     slave_subject, slave_url,
-                    #     slave_approval_value)
                     res = "n/a\tn/a\t%s\t%s\t" % (
                         slave_url,
                         slave_approval_value)
@@ -927,35 +940,15 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
                     for i in master_approval:
                         if "value" in i.keys():
                             master_approval_value = i.get('value')
-                if slave_approval_value == master_approval_value or (
-                        slave_approval_value == "n/a" == master_approval_value ):
-                    # master_subject = _get_value(master_review, ['subject'])
+                if not (slave_approval_value == master_approval_value or (
+                        slave_approval_value == "n/a" == master_approval_value )):
                     master_url = _get_value(master_review, ['url'])
-                    # slave_subject = _get_value(slave_review, ['subject'])
                     slave_url = _get_value(slave_review, ['url'])
-                    # res = "%s\t%s\t%s\t%s\t%s\t%s\t" % (
-                    #     master_subject, master_url, master_approval_value, slave_subject, slave_url,
-                    #     slave_approval_value)
-                    res = "%s\t%s\t%s\t%s\t" % (
-                             slave_approval_value , master_approval_value, slave_url, master_url)
-                    identical_reviews.append(res)
-                else:
-                    # master_subject = _get_value(master_review, ['subject'])
-                    master_url = _get_value(master_review, ['url'])
-                    # slave_subject = _get_value(slave_review, ['subject'])
-                    slave_url = _get_value(slave_review, ['url'])
-                    # res = "%s\t%s\t%s\t%s\t%s\t%s\t" % (
-                    #     master_subject, master_url, master_approval_value, slave_subject, slave_url,
-                    #     slave_approval_value)
                     res = "%s\t%s\t%s\t%s\t" % (
                              slave_approval_value , master_approval_value, slave_url, master_url)
                     project_reviews_failed += 1
                     diverged_reviews.append(res)
             project_summary.append(("%s\t%s\t%s\t%s\t") % (p , project_reviews_total  , project_reviews_opened_total  , project_reviews_failed))
-        self.log.debug(("DBG: _compareReviewStates: total length = " + str(total_length)))
-        self.log.debug(("DBG: _compareReviewStates: diverged  review quantity = " + str(diverged_reviews.__len__())))
-        self.log.debug(("DBG: _compareReviewStates: identical review quantity = " + str(identical_reviews.__len__())))
-        # print("|MASTER_SUBJECT|\t|MASTER_URL|\t|MASTER_APPROVAL|\t|SLAVE_SUBJECT|\t|SLAVE_URL|\t|SLAVE_APPROVAL|\t")
         print("|SLAVE_APPROVAL|\t|MASTER_APPROVAL|\t|SLAVE_URL|\t|MASTER_URL|\t" , file=output_file)
         for diverged_review in diverged_reviews:
             print(diverged_review , file=output_file)
@@ -964,16 +957,12 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
         total_opened = 0
         total_failed = 0
         for project in project_summary:
-            if project.split('\t')[1] != "0":
-                print(project , file = output_file)
-                total_all += int(project.split('\t')[1])
-                total_opened += int(project.split('\t')[2])
-                total_failed += int(project.split('\t')[3])
+            print(project , file = output_file)
+            total_all += int(project.split('\t')[1])
+            total_opened += int(project.split('\t')[2])
+            total_failed += int(project.split('\t')[3])
         print("____\t____\t____\t____", file=output_file)
         print("TOTAL:\t%s\t%s\t%s" %(total_all , total_opened , total_failed) )
-        # print("|MASTER_URL|\t|MASTER_APPROVAL|\t|SLAVE_URL|\t|SLAVE_APPROVAL|\t" , file=output_file)
-        # for ok_review in identical_reviews:
-        #     print(ok_review, file=output_file)
 
 class GerritWatcherMaster(GerritWatcher):
     log = logging.getLogger("gerrit.GerritWatcherMaster")
