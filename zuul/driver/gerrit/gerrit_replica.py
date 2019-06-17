@@ -390,6 +390,17 @@ class GerritConnectionReplicationBase(GerritConnection):
                     self.log.debug("DBG: _getAllOpenedReviews: Exception: %s" % e)
         return []
 
+    def _getAllReviews(self, project):
+        query = "project:%s" % project
+        for i in range(1, 3):
+            try:
+                data = self.simpleQuery(query)
+                return data
+            except Exception as e:
+                if i == 3:
+                    self.log.debug("DBG: _getAllReviews: Exception: %s" % e)
+        return []
+
 
 class GerritEventConnectorSlave(GerritEventConnector):
     log = logging.getLogger("zuul.GerritEventConnectorSlave")
@@ -871,7 +882,7 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
         diverged_reviews = []
         identical_reviews = []
         total_length = 0
-
+        project_summary = []
         output_file = None
         if output is not None:
             try:
@@ -883,9 +894,11 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
         for p in REPLICATE_PROJECTS:
             if len(projects) > 1 and p not in projects:
                 self.log.debug("DBG: compareReviewStates: %s skipped" % p)
-                self.log.debug("++++"+projects[0]+"")
                 continue
             data = self._getAllOpenedReviews(p)
+            project_reviews_total = len(self._getAllReviews(p))
+            project_reviews_opened_total = len(p)
+            project_reviews_failed = 0
             total_length += len(data)
             for slave_review in data:
                 slave_approval_value = "n/a"
@@ -906,6 +919,7 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
                     res = "n/a\tn/a\t%s\t%s\t" % (
                         slave_url,
                         slave_approval_value)
+                    project_reviews_failed += 1
                     diverged_reviews.append(res)
                     continue
                 master_approval = _get_value(master_review, ['currentPatchSet', 'approvals'])
@@ -935,7 +949,9 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
                     #     slave_approval_value)
                     res = "%s\t%s\t%s\t%s\t" % (
                              slave_approval_value , master_approval_value, slave_url, master_url)
+                    project_reviews_failed += 1
                     diverged_reviews.append(res)
+            project_summary.append(("%s\t%s\t%s\t%s\t") % (p , project_reviews_total  , project_reviews_opened_total  , project_reviews_failed))
         self.log.debug(("DBG: _compareReviewStates: total length = " + str(total_length)))
         self.log.debug(("DBG: _compareReviewStates: diverged  review quantity = " + str(diverged_reviews.__len__())))
         self.log.debug(("DBG: _compareReviewStates: identical review quantity = " + str(identical_reviews.__len__())))
@@ -943,6 +959,18 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
         print("|SLAVE_APPROVAL|\t|MASTER_APPROVAL|\t|SLAVE_URL|\t|MASTER_URL|\t" , file=output_file)
         for diverged_review in diverged_reviews:
             print(diverged_review , file=output_file)
+        print("Project\tTotal: all \topened\tFailed" , file=output_file)
+        total_all = 0
+        total_opened = 0
+        total_failed = 0
+        for project in project_summary:
+            if project.split('\t')[1] != "0":
+                print(project , file = output_file)
+                total_all += int(project.split('\t')[1])
+                total_opened += int(project.split('\t')[2])
+                total_failed += int(project.split('\t')[3])
+        print("____\t____\t____\t____", file=output_file)
+        print("TOTAL:\t%s\t%s\t%s" %(total_all , total_opened , total_failed) )
         # print("|MASTER_URL|\t|MASTER_APPROVAL|\t|SLAVE_URL|\t|SLAVE_APPROVAL|\t" , file=output_file)
         # for ok_review in identical_reviews:
         #     print(ok_review, file=output_file)
