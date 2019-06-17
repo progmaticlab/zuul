@@ -375,8 +375,8 @@ class GerritConnectionReplicationBase(GerritConnection):
     def setMerger(self, merger):
         self.merger = merger
 
-    def _findReviewInGerrit(self, project, review_id): 
-        self.log.debug("DBG: _findReviewInGerrit: project: %s, %s" % (project, review_id))
+    def _findReviewInGerrit(self, review_id): 
+        self.log.debug("DBG: _findReviewInGerrit: %s" % review_id)
         query = "change:%s" % review_id
         data = self.simpleQuery(query)
         self.log.debug("DBG: _findReviewInGerrit: data: %s" % data)
@@ -406,7 +406,7 @@ class GerritConnectionReplicationBase(GerritConnection):
         if review_id is None:
             self.log.debug("DBG: _findCommitInGerrit: review not found")
             return (None, None)
-        return (review_id, self._findReviewInGerrit(project, review_id))
+        return (review_id, self._findReviewInGerrit(review_id))
 
     def _getAllOpenedReviews(self, project):
         query = "project:%s status:open" % project
@@ -626,7 +626,7 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
         project = _get_value(event, ['change', 'project'])
         review_id = _get_value(event, ['change', 'id'])
         self.log.debug("DBG: _processChangeMergedEvent: project %s: review_id: %s" % (project, review_id))
-        data = self._findReviewInGerrit(project, review_id)
+        data = self._findReviewInGerrit(review_id)
         if data is None:
             self.log.debug("DBG: _processChangeMergedEvent: cannot find review: nothing todo")
             return
@@ -805,7 +805,7 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
         for event in events_list:
             project = _get_value(event, ['change', 'project'])
             review_id = _get_value(event, ['change', 'id'])
-            data = self._findReviewInGerrit(project, review_id)
+            data = self._findReviewInGerrit(review_id)
             if data is None:
                 self._processPatchSetEvent(event)
             else:
@@ -819,6 +819,28 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
                     self.log.debug(
                         "DBG: pushAllOpenedReviews: review_id %s , status = %s : already pushed - skipped" % (
                             review_id, status))
+
+    def pushReviews(self, reviews=None):
+        self.log.debug("DBG: pushReviews")
+        events_list = []
+        for review in reviews:
+            data = self.master._findReviewInGerrit(review)
+            if data is None:
+                self.log.debug("DBG: pushReviews: cannot find review %s on master" % review)
+                continue
+            event = self._currentPatchSet2ChangeEvent(data)
+            if self._filterEvent(event):
+                continue
+            events_list += [event]
+        for event in events_list:
+            review_id = _get_value(event, ['change', 'id'])
+            data = self._findReviewInGerrit(review_id)
+            status = 'NEW' if data is None else _get_value(data, ['change', 'status'])
+            if status == 'ABANDONED':
+                # restore event
+                self._processChangeRestoredEvent(event)
+            # apply latest change if any
+            self._processPatchSetEvent(event)
 
     def recloneProjectsWithOpenedReviews(self, projects=None):
         self.log.debug("DBG: recloneProjectsWithOpenedReviews")
@@ -925,7 +947,7 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
                 # slave_subject = _get_value(slave_review, ['subject'])
                 slave_url = _get_value(slave_review, ['url'])
                 slave_review_id = _get_value(slave_review, 'id')
-                master_review = self.master._findReviewInGerrit(p, slave_review_id)
+                master_review = self.master._findReviewInGerrit(slave_review_id)
                 if master_review is None:
                     # res = "n/a\tn/a\tn/a\t%s\t%s\t%s\t" % (
                     #     slave_subject, slave_url,
@@ -1050,7 +1072,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('cmd', default='sync')
     parser.add_argument('--projects', default='')
+    parser.add_argument('--reviews', default='')
     parser.add_argument('--output' , default=None , help="Name for outputfile. Output in stdout by default")
+
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.DEBUG)
@@ -1140,6 +1164,10 @@ if __name__ == "__main__":
         output = args.output
         projects = args.projects.split(',')
         connection_slave.compareReviewStates(projects=projects , output=output)
+    elif args.cmd == 'push_reviews':
+        reviews = args.reviews.split(',')
+        connection_slave.pushReviews(reviews=reviews)
+
     connection_slave.onStop()
     connection_master.onStop()
     connection_master.setSlave(None)
