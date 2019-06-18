@@ -553,7 +553,7 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
             # review is not replicated yet
             # for the first patch set ensure that there will be the same parent 
             for parent in _get_value(event, ['patchSet', 'parents']):
-                parent_review_id, parent_event = self._findCommitInGerritMaster(project, parent)
+                parent_review_id, parent_event = self._findCommitInGerritMaster(project, branch, parent)
                 if parent_review_id is None:
                     self.log.debug("DBG: _processPatchSetEvent: %s: cannot find review id for parent commit %s: skip" %(review_id, parent))
                     return None
@@ -618,9 +618,9 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
                     break
         return changeid
 
-    def _findCommitInGerritMaster(self, project, commit_id):
+    def _findCommitInGerritMaster(self, project, branch, commit_id):
         if self.master is not None:
-            return self.master._findCommitInGerrit(project, commit_id)
+            return self.master._findCommitInGerrit(project, branch, commit_id)
         return (None, None)
 
     def _processChangeRestoredOrAbandonedEvent(self, event, action, changeid, message=None):
