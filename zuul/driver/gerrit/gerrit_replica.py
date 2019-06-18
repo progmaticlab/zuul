@@ -367,17 +367,50 @@ def _get_value(data, field):
 
 
 class GerritConnectionReplicationBase(GerritConnection):
-    def _findReviewInGerrit(self, project, review_id):
-        self.log.debug("DBG: _findReviewInGerrit: project: %s, %s" % (project, review_id))
+    def __init__(self, driver, connection_name, connection_config):
+        super(GerritConnectionReplicationBase, self).__init__(
+            driver, connection_name, connection_config)
+        self.merger = None
+
+    def setMerger(self, merger):
+        self.merger = merger
+
+    def _findReviewInGerrit(self, review_id, branch = None, status = None): 
+        self.log.debug("DBG: _findReviewInGerrit: review_id=%s branch=%s status=%s" % (review_id, branch, status))
         query = "change:%s" % review_id
         data = self.simpleQuery(query)
         self.log.debug("DBG: _findReviewInGerrit: data: %s" % data)
+        res = None
         for record in data:
-            rid = _get_value(record, 'id')
-            if rid == review_id:
-                self.log.debug("DBG: _findReviewInGerrit: found: %s" % record)
-                return record
-        return None
+            if branch is not None and branch != _get_value(record, 'branch'):
+                continue
+            if status is not None and status != _get_value(record, 'status'):
+                continue
+            res = record
+            break
+        return res
+
+    def _getReviewIdByCommit(self, project, commit_id):
+        repo = self.merger.getRepo(self.connection_name, project)
+        repo.update()
+        git_repo = repo.createRepoObject()
+        try:
+            git_repo.git.checkout(commit_id)
+            res = REVIEW_ID_RE.search(git_repo.head.commit.message)
+            if res is None:
+                self.log.debug("DBG: _getReviewIdByCommit: no review id in project: %s, commit: %s, message: %s" % (project, commit_id, git_repo.head.commit.message))
+                return None
+            return res.group(0).split()[1]
+        except Exception:
+            # commit not found
+            return None
+
+    def _findCommitInGerrit(self, project, branch, commit_id): 
+        review_id = self._getReviewIdByCommit(project, commit_id)
+        if review_id is None:
+            self.log.debug("DBG: _findCommitInGerrit: review not found")
+            return (None, None)
+        return (review_id, self._findReviewInGerrit(review_id, branch=branch))
 
     def _getAllOpenedReviews(self, project):
         query = "project:%s status:open" % project
@@ -455,15 +488,11 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
     def __init__(self, driver, connection_name, connection_config):
         super(GerritConnectionSlave, self).__init__(
             driver, connection_name, connection_config)
-        self.merger = None
         self.master = None
         self.ssh_gerrit_client = None
 
     def setMaster(self, master):
         self.master = master
-
-    def setMerger(self, merger):
-        self.merger = merger
 
     def doReplicateEvent(self, event):
         if self._filterEvent(event):
@@ -506,10 +535,17 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
         remote = urllib.parse.urlunparse(r._replace(path="/{}".format(project), fragment='', query=''))
         return remote
 
-    def _checkoutFromRemote(self, repo, remote, project, ref):
+    def _checkoutFromRemote(self, repo, remote, ref):
         repo.fetchFrom(remote, ref)
         git_repo = repo.createRepoObject()
         git_repo.git.checkout("FETCH_HEAD")
+        return git_repo.head.commit
+
+    def _cherryPickFromRemote(self, repo, remote, ref):
+        repo.checkout('master')
+        repo.fetchFrom(remote, ref)
+        git_repo = repo.createRepoObject()
+        git_repo.git.cherry_pick("FETCH_HEAD")
         return git_repo.head.commit
 
     def _amendCommitMessage(self, repo, message=None, commit_id=None):
@@ -526,15 +562,35 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
         commit = None
         project = _get_value(event, ['change', 'project'])
         branch = _get_value(event, ['change', 'branch'])
-        self.log.debug("DBG: _processPatchSetEvent: project=%s, branch=%s" % (project, branch))
+        review_id = _get_value(event, ['change', 'id'])
+        self.log.debug("DBG: _processPatchSetEvent: project=%s, branch=%s, review=%s" % (project, branch, review_id))
         url = _get_value(event, ['change', 'url'])
         ref = _get_value(event, ['patchSet', 'ref'])
-        if not url:
-            self.log.debug("DBG: _processPatchSetEvent: skip event, epmty url for change")
-            return
+        changeid = self._getCurrentChangeId(event)
+        if changeid is None:
+            # review is not replicated yet
+            # for the first patch set ensure that there will be the same parent 
+            for parent in _get_value(event, ['patchSet', 'parents']):
+                parent_review_id, parent_event = self._findCommitInGerritMaster(project, branch, parent)
+                if parent_review_id is None:
+                    self.log.debug("DBG: _processPatchSetEvent: %s: cannot find review id for parent commit %s: skip" %(review_id, parent))
+                    return None
+                #patch parent event if it has no change inside )it is for merged changes)
+                parent_event = self._currentPatchSet2ChangeEvent(parent_event)
+                # parent found on master
+                parent_changeid = self._getCurrentChangeId(parent_event)
+                if parent_changeid is not None:
+                    # parent already commited
+                    self.log.debug("DBG: _processPatchSetEvent: parent:  %s: already commited" % parent_review_id)
+                    continue
+                # parent should be pushed first to keep the same commits order
+                if self._processPatchSetEvent(parent_event) is None:
+                    self.log.debug("DBG: _processPatchSetEvent: failed to push parent %s: skip the child" % parent_review_id)
+                    return None
+        # process the event itself
         remote = self._getRemote(project, url)
         repo = self.merger.getRepo(self.connection_name, project)
-        commit = self._checkoutFromRemote(repo, remote, project, ref)
+        commit = self._cherryPickFromRemote(repo, remote, ref)
         self.log.debug("DBG: _processPatchSetEvent: commit=%s" % commit)
         # reset author to default (zuul)
         new_message = 'Initial Review: %s\n\n%s' % (url, _get_value(event, ['change', 'commitMessage']))
@@ -543,38 +599,7 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
         # public changes to gerrit
         repo.push('HEAD', 'refs/publish/%s' % branch)
         self._pauseForGerrit()
-        changeid = self._getCurrentChangeId(event)
-        if changeid is not None:
-            return changeid
-        self.log.debug("DBG: _processPatchSetEvent: push failed for %s" % url)
-        if not process_parents:
-            return changeid
-        # try push parent (TODO: for one only first parent)
-        try_again = False
-        for p in _get_value(event, ['patchSet', 'parents']):
-            parent_review_id, parent_event = self._findCommitInGerritMaster(project, p)
-            if parent_event is not None:
-                # patch parent event if it has no change inside )it is for merged changes)
-                parent_event = self._currentPatchSet2ChangeEvent(parent_event)
-                # pranet found on master
-                parent_changeid = self._getCurrentChangeId(parent_event)
-                if parent_changeid is not None:
-                    # parent already commited
-                    self.log.debug("DBG: _processPatchSetEvent: parent:  %s: already commited" % parent_review_id)
-                    continue
-                # replicate parent
-                self.log.debug("DBG: _processPatchSetEvent: parent:  %s: try to replicate" % parent_review_id)
-                parent_changeid = self._processPatchSetEvent(parent_event)
-                try_again = parent_changeid is not None
-        if try_again:
-            # try to push commit again
-            self.log.debug("DBG: _processPatchSetEvent: retry to push")
-            git_repo = repo.createRepoObject()
-            git_repo.git.checkout(commit)
-            repo.push('HEAD', 'refs/publish/%s' % branch)
-            self._pauseForGerrit()
-            changeid = self._getCurrentChangeId(event)
-        return changeid
+        return self._getCurrentChangeId(event)
 
     def _processChangeRestoredEvent(self, event, message='recheck'):
         action = {'restore': True}
@@ -611,9 +636,9 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
                     break
         return changeid
 
-    def _findCommitInGerritMaster(self, project, commit_id):
+    def _findCommitInGerritMaster(self, project, branch, commit_id):
         if self.master is not None:
-            return self.master._findCommitInGerrit(project, commit_id)
+            return self.master._findCommitInGerrit(project, branch, commit_id)
         return (None, None)
 
     def _processChangeRestoredOrAbandonedEvent(self, event, action, changeid, message=None):
@@ -628,9 +653,10 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
 
     def _processChangeMergedEvent(self, event):
         project = _get_value(event, ['change', 'project'])
+        branch = _get_value(event, ['change', 'branch'])
         review_id = _get_value(event, ['change', 'id'])
         self.log.debug("DBG: _processChangeMergedEvent: project %s: review_id: %s" % (project, review_id))
-        data = self._findReviewInGerrit(project, review_id)
+        data = self._findReviewInGerrit(review_id, branch=branch)
         if data is None:
             self.log.debug("DBG: _processChangeMergedEvent: cannot find review: nothing todo")
             return
@@ -809,9 +835,10 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
         for event in events_list:
             project = _get_value(event, ['change', 'project'])
             review_id = _get_value(event, ['change', 'id'])
-            data = self._findReviewInGerrit(project, review_id)
+            branch = _get_value(event, ['change', 'branch'])
+            data = self._findReviewInGerrit(review_id, branch=branch)
             if data is None:
-                self._processPatchSetEvent(event, process_parents=False)
+                self._processPatchSetEvent(event)
             else:
                 status = _get_value(data, 'status')
                 if status is None:
@@ -823,6 +850,28 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
                     self.log.debug(
                         "DBG: pushAllOpenedReviews: review_id %s , status = %s : already pushed - skipped" % (
                             review_id, status))
+
+    def pushReviews(self, reviews=None, branch='master'):
+        self.log.debug("DBG: pushReviews")
+        events_list = []
+        for review in reviews:
+            data = self.master._findReviewInGerrit(review, branch=branch)
+            if data is None:
+                self.log.debug("DBG: pushReviews: cannot find review %s on master" % review)
+                continue
+            event = self._currentPatchSet2ChangeEvent(data)
+            if self._filterEvent(event):
+                continue
+            events_list += [event]
+        for event in events_list:
+            review_id = _get_value(event, ['change', 'id'])
+            data = self._findReviewInGerrit(review_id, branch=branch)
+            status = 'NEW' if data is None else _get_value(data, ['change', 'status'])
+            if status == 'ABANDONED':
+                # restore event
+                self._processChangeRestoredEvent(event)
+            # apply latest change if any
+            self._processPatchSetEvent(event)
 
     def recloneProjectsWithOpenedReviews(self, projects=None):
         self.log.debug("DBG: recloneProjectsWithOpenedReviews")
@@ -927,7 +976,8 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
                             slave_approval_value = i.get('value')
                 slave_url = _get_value(slave_review, ['url'])
                 slave_review_id = _get_value(slave_review, 'id')
-                master_review = self.master._findReviewInGerrit(p, slave_review_id)
+                branch = _get_value(slave_review, 'branch')
+                master_review = self.master._findReviewInGerrit(slave_review_id, branch=branch)
                 if master_review is None:
                     res = "n/a\tn/a\t%s\t%s\t" % (
                         slave_url,
@@ -964,6 +1014,7 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
         print("____\t____\t____\t____", file=output_file)
         print("TOTAL:\t%s\t%s\t%s" %(total_all , total_opened , total_failed) )
 
+
 class GerritWatcherMaster(GerritWatcher):
     log = logging.getLogger("gerrit.GerritWatcherMaster")
 
@@ -982,10 +1033,6 @@ class GerritConnectionMaster(GerritConnectionReplicationBase):
         super(GerritConnectionMaster, self).__init__(
             driver, connection_name, connection_config)
         self.slave = None
-        self.merger = None
-
-    def setMerger(self, merger):
-        self.merger = merger
 
     def setSlave(self, slave):
         self.slave = slave
@@ -994,28 +1041,6 @@ class GerritConnectionMaster(GerritConnectionReplicationBase):
         if not self.slave:
             return
         return self.slave.addEvent(event)
-
-    def _getReviewIdByCommit(self, project, commit_id):
-        repo = self.merger.getRepo(self.connection_name, project)
-        git_repo = repo.createRepoObject()
-        try:
-            git_repo.git.checkout(commit_id)
-            res = REVIEW_ID_RE.search(git_repo.head.commit.message)
-            self.log.debug("DBG: _getReviewIdByCommit: project: %s, commit: %s, message: %s" % (
-                project, commit_id, git_repo.head.commit.message))
-            if res is None:
-                return None
-            return res.group(0).split()[1]
-        except Exception as e:
-            self.log.debug("DBG: _getReviewIdByCommit: Project: %s, Commit: %s Exception: %s" % (project, commit_id, e))
-            return None
-
-    def _findCommitInGerrit(self, project, commit_id):
-        review_id = self._getReviewIdByCommit(project, commit_id)
-        if review_id is None:
-            self.log.debug("DBG: _findCommitInGerrit: review not found")
-            return (None, None)
-        return (review_id, self._findReviewInGerrit(project, review_id))
 
     def _start_watcher_thread(self):
         self.log.debug("DBG: gcm start gwm")
@@ -1050,7 +1075,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('cmd', default='sync')
     parser.add_argument('--projects', default='')
+    parser.add_argument('--reviews', default='')
     parser.add_argument('--output' , default=None , help="Name for outputfile. Output in stdout by default")
+
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.DEBUG)
@@ -1140,6 +1167,10 @@ if __name__ == "__main__":
         output = args.output
         projects = args.projects.split(',')
         connection_slave.compareReviewStates(projects=projects , output=output)
+    elif args.cmd == 'push_reviews':
+        reviews = args.reviews.split(',')
+        connection_slave.pushReviews(reviews=reviews)
+
     connection_slave.onStop()
     connection_master.onStop()
     connection_master.setSlave(None)
