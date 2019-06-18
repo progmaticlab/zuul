@@ -356,6 +356,9 @@ COMMENT_RE = re.compile(COMMENT_PATTERN, re.MULTILINE)
 REVIEW_ID_PATTERN = 'Change-Id:[ ]*[a-z0-9A-Z]+'
 REVIEW_ID_RE = re.compile(REVIEW_ID_PATTERN)
 
+MERGE_COMMIT_PATTERN = 'Merge:[ ]*[a-z0-9A-Z]+[ ]+[a-z0-9A-Z]+'
+MERGE_COMMIT_RE = re.compile(MERGE_COMMIT_PATTERN)
+
 
 def _get_value(data, field):
     if not data:
@@ -395,15 +398,24 @@ class GerritConnectionReplicationBase(GerritConnection):
         repo.update()
         git_repo = repo.createRepoObject()
         try:
-            git_repo.git.checkout(commit_id)
-            res = REVIEW_ID_RE.search(git_repo.head.commit.message)
-            if res is None:
-                self.log.debug("DBG: _getReviewIdByCommit: no review id in project: %s, commit: %s, message: %s" % (project, commit_id, git_repo.head.commit.message))
-                return None
-            return res.group(0).split()[1]
+            for c in git_repo.iter_commits(rev=commit_id):
+                self.log.debug("DBG: _getReviewIdByCommit: commit: %s" % c)
+
+                msg = c.message.strip()
+                res = REVIEW_ID_RE.search(msg)
+                if res is not None:
+                    return res.group(0).split()[1]
+
+                if MERGE_COMMIT_RE.search(msg) is None:
+                    # if it is not merge then return none
+                    self.log.debug("DBG: _getReviewIdByCommit: stop failed to find review id in project: %s, commit: %s, message: %s" % (project, c, msg))
+                    return None
+
         except Exception:
             # commit not found
-            return None
+            pass
+
+        return None
 
     def _findCommitInGerrit(self, project, branch, commit_id): 
         review_id = self._getReviewIdByCommit(project, commit_id)
