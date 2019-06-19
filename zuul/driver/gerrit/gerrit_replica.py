@@ -416,6 +416,26 @@ class GerritConnectionReplicationBase(GerritConnection):
             return (None, None)
         return (review_id, self._findReviewInGerrit(review_id, branch=branch))
 
+    def _findReviewInGerrit(self, project, branch, review_id): 
+        self.log.debug("DBG: _findReviewInGerrit: project=%s, branch=%s, review_id=%s" % (project, branch, review_id))
+        repo = self.merger.getRepo(self.connection_name, project)
+        repo.update()
+        git_repo = repo.createRepoObject()
+        try:
+            for c in git_repo.iter_commits():
+                self.log.debug("DBG: _findReviewInGerrit: commit: %s" % c)
+                msg = c.message.strip()
+                res = REVIEW_ID_RE.search(msg)
+                if res is not None:
+                    return c
+                self.log.debug("DBG: _getReviewIdByCommit: skip commit with message: %s" % msg)
+
+        except Exception:
+            # commit not found
+            pass
+
+        return None
+
     def _getAllOpenedReviews(self, project):
         query = "project:%s status:open" % project
         for i in range(1, 3):
@@ -578,14 +598,18 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
                 parent_review_id, parent_event = self._findCommitInGerritMaster(project, branch, parent)
                 if parent_review_id is None:
                     self.log.debug("DBG: _processPatchSetEvent: %s: cannot find review id for parent commit %s: skip" %(review_id, parent))
-                    return None
-                #patch parent event if it has no change inside )it is for merged changes)
-                parent_event = self._currentPatchSet2ChangeEvent(parent_event)
-                # parent found on master
-                parent_changeid = self._getCurrentChangeId(parent_event)
-                if parent_changeid is not None:
-                    # parent already commited
+                    return None                
+                if self._findReviewInGerrit(project, branch, parent_review_id) is not None:
                     self.log.debug("DBG: _processPatchSetEvent: parent:  %s: already commited" % parent_review_id)
+                    continue
+                parent_event = self._currentPatchSet2ChangeEvent(parent_event)
+                change = self._getCurrentChange(project, branch, parent_review_id)
+                if change is not None:
+                    status = _get_value(change, 'status')
+                    if status == 'ABANDONED':
+                        self._processChangeRestoredEvent(parent_event)
+                    else:
+                        self.log.debug("DBG: _processPatchSetEvent: parent review is open: nothing to do")
                     continue
                 # parent should be pushed first to keep the same commits order
                 if self._processPatchSetEvent(parent_event) is None:
@@ -628,17 +652,27 @@ class GerritConnectionSlave(GerritConnectionReplicationBase):
         changeid = '%s,%s' % (change_number, patch_number)
         return changeid
 
-    def _getCurrentChangeId(self, event):
-        review_id = _get_value(event, ['change', 'id'])
+    def _getCurrentChange(self, project, branch, review_id):
         query = "change:%s" % review_id
         data = self.simpleQuery(query)
-        changeid = None
+        change = None
         for record in data:
-            if _get_value(record, 'id') == review_id:
-                changeid = self._formatCurrentChangeId(record)
-                if changeid is not None:
-                    break
-        return changeid
+            if _get_value(record, 'project') != project:
+                continue
+            if _get_value(record, 'branch') != branch:
+                continue
+            change = record
+            break
+        return change
+
+    def _getCurrentChangeId(self, event):
+        review_id = _get_value(event, ['change', 'id'])
+        project = _get_value(event, ['change', 'project'])
+        branch = _get_value(event, ['change', 'branch'])
+        change = self._getCurrentChange(project, branch, review_id)
+        if change is None:
+            return None        
+        return self._formatCurrentChangeId(change)
 
     def _findCommitInGerritMaster(self, project, branch, commit_id):
         if self.master is not None:
