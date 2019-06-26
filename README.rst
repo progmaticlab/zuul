@@ -1,3 +1,5 @@
+This is special fork of zuul project that came from Juniper. It has some fixes that are absent in upstream but these fixes are required to work with vexxhost and in new TF CI. Branch 'contrail/feature/zuulv3' is used for deploying TF CI.
+
 Zuul
 ====
 
