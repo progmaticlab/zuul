@@ -27,7 +27,7 @@ python-daemon
 python-openid==2.2.5
 PyYAML==3.11
 roman==2.0.0
-scgi>=1.13
+scgi>=1.13,<2.0
 certifi
 six==1.10.0
 Tempita==0.5.2
